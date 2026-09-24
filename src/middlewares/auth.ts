@@ -1,16 +1,29 @@
 import { createMiddleware } from "hono/factory";
+import { SQL } from "bun";
 import { env } from "../config/env.js";
+
+// Cache en memoria para no saturar la base de datos (Token -> { empresa, expiresAt })
+const API_KEY_CACHE = new Map<string, { empresa: any; expiresAt: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache
+
+let sqlClient: SQL | null = null;
+function getSql() {
+  if (!sqlClient && env.POSTGRES_URL) {
+    sqlClient = new SQL(env.POSTGRES_URL);
+  }
+  return sqlClient;
+}
 
 /**
  * Middleware para validar la clave de autenticación API Key
  * Admite:
- * - Header: `x-api-key: TU_API_KEY`
- * - Header: `Authorization: Bearer TU_API_KEY`
+ * 1. API Key Maestra (.env / Vercel API_KEY)
+ * 2. API Keys por Empresa (Almacenadas en Supabase PostgreSQL tabla `empresas`)
  */
 export const apiKeyAuth = createMiddleware(async (c, next) => {
   const path = c.req.path;
 
-  // Rutas públicas: /docs, /openapi.json, /api/v1/health
+  // Rutas públicas: /, /docs, /openapi.json, /api/v1/health
   if (
     path === "/" ||
     path.startsWith("/docs") ||
@@ -28,7 +41,7 @@ export const apiKeyAuth = createMiddleware(async (c, next) => {
     token = authHeader.substring(7).trim();
   }
 
-  if (!token || token !== env.API_KEY) {
+  if (!token) {
     return c.json(
       {
         success: false,
@@ -39,5 +52,49 @@ export const apiKeyAuth = createMiddleware(async (c, next) => {
     );
   }
 
-  await next();
+  // 1. Validar si coincide con la API Key Maestra del entorno
+  if (token === env.API_KEY) {
+    return await next();
+  }
+
+  // 2. Verificar cache en memoria
+  const cached = API_KEY_CACHE.get(token);
+  if (cached && cached.expiresAt > Date.now()) {
+    c.set("empresa", cached.empresa);
+    return await next();
+  }
+
+  // 3. Consultar en Supabase PostgreSQL tabla empresas
+  const sql = getSql();
+  if (sql) {
+    try {
+      const rows = await sql`
+        SELECT id, ruc, razon_social, usuario_sol, clave_sol, is_beta, activo
+        FROM empresas
+        WHERE api_key = ${token} AND activo = true
+        LIMIT 1
+      `;
+
+      if (rows && rows.length > 0) {
+        const empresa = rows[0];
+        API_KEY_CACHE.set(token, {
+          empresa,
+          expiresAt: Date.now() + CACHE_TTL_MS,
+        });
+        c.set("empresa", empresa);
+        return await next();
+      }
+    } catch (err: any) {
+      console.error("Error al validar API key en Supabase:", err.message || err);
+    }
+  }
+
+  return c.json(
+    {
+      success: false,
+      error: "Acceso no autorizado. La API Key no es válida o la empresa está inactiva.",
+      statusCode: 401,
+    },
+    401
+  );
 });

@@ -18,13 +18,14 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
   const now = new Date();
   const fechaEmision = body.fechaEmision || now.toISOString().split("T")[0]!;
   const horaEmision = body.horaEmision || now.toTimeString().split(" ")[0]!;
+  const empresaAuth = (c as any).get("empresa");
 
-  // Emisor: usar el enviado en el payload o tomar los defaults de entorno
+  // Emisor: usar el enviado en el payload, los datos de la empresa autenticada, o defaults
   const emisor = {
-    ruc: body.emisor?.ruc || env.SUNAT_RUC,
-    razonSocial: body.emisor?.razonSocial || "NOVAMARKET SUPERMERCADOS S.A.C.",
-    nombreComercial: body.emisor?.nombreComercial || "NovaMarket",
-    direccion: body.emisor?.direccion || "Av. Principal 123 - Surco, Lima",
+    ruc: body.emisor?.ruc || empresaAuth?.ruc || env.SUNAT_RUC,
+    razonSocial: body.emisor?.razonSocial || empresaAuth?.razon_social || "EMPRESA S.A.C.",
+    nombreComercial: body.emisor?.nombreComercial || empresaAuth?.razon_social || "MiNegocio",
+    direccion: body.emisor?.direccion || "Av. Principal 123 - Lima",
     ubigeo: body.emisor?.ubigeo || "150101",
     departamento: body.emisor?.departamento || "LIMA",
     provincia: body.emisor?.provincia || "LIMA",
@@ -109,9 +110,9 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
   if (body.enviarASunat) {
     const credentials = {
       ruc: emisor.ruc,
-      usuarioSol: body.emisor?.usuarioSol || env.SUNAT_USUARIO_SOL,
-      claveSol: body.emisor?.claveSol || env.SUNAT_CLAVE_SOL,
-      isBeta: body.emisor?.isBeta ?? (env.SUNAT_ENV === "beta"),
+      usuarioSol: body.emisor?.usuarioSol || empresaAuth?.usuario_sol || env.SUNAT_USUARIO_SOL,
+      claveSol: body.emisor?.claveSol || empresaAuth?.clave_sol || env.SUNAT_CLAVE_SOL,
+      isBeta: body.emisor?.isBeta ?? empresaAuth?.is_beta ?? (env.SUNAT_ENV === "beta"),
     };
 
     const soapClient = new SunatSoapClient(credentials);
