@@ -4,8 +4,6 @@ import { env } from "../config/env.js";
 export const adminUiRouter = new Hono();
 
 adminUiRouter.get("/", (c) => {
-  const masterKey = env.API_KEY;
-
   return c.html(`
 <!DOCTYPE html>
 <html lang="es" class="dark">
@@ -37,10 +35,59 @@ adminUiRouter.get("/", (c) => {
     }
   </style>
 </head>
-<body class="bg-[#0b0f19] text-slate-100 min-h-screen font-sans flex flex-col">
+<body class="bg-[#0b0f19] text-slate-100 min-h-screen font-sans flex flex-col selection:bg-teal-500/20 selection:text-teal-300">
 
-  <!-- NAVBAR -->
-  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
+  <!-- LOGIN SCREEN (PANTALLA DE ACCESO PROTEGIDO) -->
+  <div id="login-screen" class="min-h-screen flex items-center justify-center p-4">
+    <div class="glass-card max-w-md w-full p-8 rounded-3xl border border-slate-800 shadow-2xl space-y-6 relative overflow-hidden bg-slate-900/90 backdrop-blur-2xl">
+      <!-- Decoración luminosa -->
+      <div class="absolute -top-12 -right-12 w-36 h-36 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-12 -left-12 w-36 h-36 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="text-center space-y-2">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-teal-500 to-indigo-600 flex items-center justify-center mx-auto shadow-xl shadow-teal-500/25">
+          <i data-lucide="shield-check" class="w-7 h-7 text-white"></i>
+        </div>
+        <h2 class="text-xl font-bold text-white tracking-tight">Acceso Administrativo</h2>
+        <p class="text-xs text-slate-400">Ingrese la Master API Key de su servidor para acceder al panel de control.</p>
+      </div>
+
+      <!-- ALERTA DE ERROR -->
+      <div id="login-error-alert" class="hidden p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+        <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+        <span id="login-error-msg">Clave maestra inválida. Acceso denegado.</span>
+      </div>
+
+      <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Master API Key</label>
+          <div class="relative">
+            <input type="password" id="login-input-key" required placeholder="sk_live_..." autocomplete="current-password" class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-4 pr-11 py-3 text-sm font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-teal-500 transition">
+            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3 top-3 text-slate-500 hover:text-slate-300 transition" title="Mostrar/Ocultar">
+              <i id="eye-icon" data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="login-btn-submit" class="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-semibold text-sm py-3 rounded-xl shadow-lg shadow-teal-500/20 flex items-center justify-center gap-2 transition hover:-translate-y-0.5">
+          <i data-lucide="log-in" class="w-4 h-4"></i>
+          <span id="login-btn-text">Iniciar Sesión</span>
+        </button>
+      </form>
+
+      <div class="pt-2 text-center border-t border-slate-800/80">
+        <a href="/" class="text-xs text-slate-500 hover:text-teal-400 inline-flex items-center gap-1.5 transition">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+          <span>Volver al inicio público</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN APP DASHBOARD (OCULTO HASTA AUTENTICARSE) -->
+  <div id="admin-app" class="hidden min-h-screen flex flex-col flex-1">
+    <!-- NAVBAR -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-teal-500/20">
@@ -632,6 +679,7 @@ adminUiRouter.get("/", (c) => {
     </section>
 
   </main>
+  </div> <!-- END #admin-app -->
 
   <!-- MODAL: NUEVA / EDITAR EMPRESA -->
   <div id="modal-empresa" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
@@ -749,24 +797,6 @@ adminUiRouter.get("/", (c) => {
     </div>
   </div>
 
-  <!-- MODAL: LOGIN / MASTER KEY -->
-  <div id="modal-login" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="glass-card bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl text-center">
-      <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-500 to-indigo-600 flex items-center justify-center mx-auto shadow-lg shadow-teal-500/20">
-        <i data-lucide="lock" class="w-6 h-6 text-white"></i>
-      </div>
-      <div>
-        <h3 class="text-base font-bold text-white">Acceso Administrativo</h3>
-        <p class="text-xs text-slate-400 mt-1">Ingrese la Master API Key de su servidor.</p>
-      </div>
-
-      <form onsubmit="handleAdminLogin(event)" class="space-y-3">
-        <input type="password" id="login-master-key" required placeholder="sk_live_..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm font-mono text-center text-slate-200 placeholder-slate-600 focus:border-teal-500 focus:outline-none">
-        <button type="submit" class="w-full bg-gradient-to-r from-teal-500 to-indigo-600 hover:from-teal-600 hover:to-indigo-700 text-white font-semibold text-sm py-2.5 rounded-xl shadow-lg shadow-teal-500/20 transition">Entrar al Panel</button>
-      </form>
-    </div>
-  </div>
-
   <!-- JAVASCRIPT LOGIC -->
   <script>
     let currentEmpresas = [];
@@ -774,32 +804,111 @@ adminUiRouter.get("/", (c) => {
     let lastXmlContent = "";
 
     function getAdminKey() {
-      return localStorage.getItem("sunat_admin_key") || "${masterKey}";
+      return sessionStorage.getItem("sunat_admin_key") || localStorage.getItem("sunat_admin_key") || "";
     }
 
-    function checkAuth() {
+    function showLoginScreen(error) {
+      document.getElementById("login-screen").classList.remove("hidden");
+      document.getElementById("admin-app").classList.add("hidden");
+      const alertBox = document.getElementById("login-error-alert");
+      const alertMsg = document.getElementById("login-error-msg");
+      if (error) {
+        alertBox.classList.remove("hidden");
+        alertMsg.textContent = error;
+      } else {
+        alertBox.classList.add("hidden");
+      }
+      lucide.createIcons();
+    }
+
+    function showAdminApp() {
+      document.getElementById("login-screen").classList.add("hidden");
+      document.getElementById("admin-app").classList.remove("hidden");
+      lucide.createIcons();
+    }
+
+    function togglePasswordVisibility() {
+      const input = document.getElementById("login-input-key");
+      const icon = document.getElementById("eye-icon");
+      if (input.type === "password") {
+        input.type = "text";
+        icon.setAttribute("data-lucide", "eye-off");
+      } else {
+        input.type = "password";
+        icon.setAttribute("data-lucide", "eye");
+      }
+      lucide.createIcons();
+    }
+
+    async function checkAuth() {
       const key = getAdminKey();
       if (!key) {
-        document.getElementById("modal-login").classList.remove("hidden");
-      } else {
-        document.getElementById("modal-login").classList.add("hidden");
-        loadDashboardData();
+        showLoginScreen();
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/v1/admin/empresas", {
+          headers: { "x-api-key": key }
+        });
+        if (res.ok) {
+          showAdminApp();
+          loadDashboardData();
+        } else {
+          sessionStorage.removeItem("sunat_admin_key");
+          localStorage.removeItem("sunat_admin_key");
+          showLoginScreen("Sesión expirada o credencial no autorizada.");
+        }
+      } catch (err) {
+        showLoginScreen("Error al verificar credenciales con el servidor.");
       }
     }
 
-    function handleAdminLogin(e) {
+    async function handleAdminLogin(e) {
       e.preventDefault();
-      const input = document.getElementById("login-master-key").value.trim();
-      if (input) {
-        localStorage.setItem("sunat_admin_key", input);
-        document.getElementById("modal-login").classList.add("hidden");
-        loadDashboardData();
+      const input = document.getElementById("login-input-key").value.trim();
+      if (!input) return;
+
+      const btn = document.getElementById("login-btn-submit");
+      const btnText = document.getElementById("login-btn-text");
+      const alertBox = document.getElementById("login-error-alert");
+      const alertMsg = document.getElementById("login-error-msg");
+
+      alertBox.classList.add("hidden");
+      btn.disabled = true;
+      btnText.textContent = "Verificando credencial...";
+
+      try {
+        const res = await fetch("/api/v1/admin/empresas", {
+          headers: { "x-api-key": input }
+        });
+
+        if (res.ok) {
+          sessionStorage.setItem("sunat_admin_key", input);
+          localStorage.setItem("sunat_admin_key", input);
+          showAdminApp();
+          loadDashboardData();
+        } else {
+          alertBox.classList.remove("hidden");
+          alertMsg.textContent = "Master API Key incorrecta. Acceso denegado por el servidor.";
+          document.getElementById("login-input-key").focus();
+          document.getElementById("login-input-key").select();
+        }
+      } catch (err) {
+        alertBox.classList.remove("hidden");
+        alertMsg.textContent = "Error de conexión con el servidor.";
+      } finally {
+        btn.disabled = false;
+        btnText.textContent = "Iniciar Sesión";
+        lucide.createIcons();
       }
     }
 
     function logoutAdmin() {
+      sessionStorage.removeItem("sunat_admin_key");
       localStorage.removeItem("sunat_admin_key");
-      location.reload();
+      document.getElementById("login-input-key").value = "";
+      showLoginScreen();
     }
 
     async function loadDashboardData() {
@@ -826,7 +935,7 @@ adminUiRouter.get("/", (c) => {
           headers: { "x-api-key": getAdminKey() }
         });
         if (res.status === 401) {
-          document.getElementById("modal-login").classList.remove("hidden");
+          logoutAdmin();
           return;
         }
         const data = await res.json();
