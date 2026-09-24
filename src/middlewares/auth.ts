@@ -1,18 +1,10 @@
 import { createMiddleware } from "hono/factory";
-import { SQL } from "bun";
 import { env } from "../config/env.js";
+import { getDb } from "../config/db.js";
 
 // Cache en memoria para no saturar la base de datos (Token -> { empresa, expiresAt })
 const API_KEY_CACHE = new Map<string, { empresa: any; expiresAt: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache
-
-let sqlClient: SQL | null = null;
-function getSql() {
-  if (!sqlClient && env.POSTGRES_URL) {
-    sqlClient = new SQL(env.POSTGRES_URL);
-  }
-  return sqlClient;
-}
 
 /**
  * Middleware para validar la clave de autenticación API Key
@@ -23,12 +15,13 @@ function getSql() {
 export const apiKeyAuth = createMiddleware(async (c, next) => {
   const path = c.req.path;
 
-  // Rutas públicas: /, /docs, /openapi.json, /api/v1/health
+  // Rutas públicas: /, /docs, /openapi.json, /api/v1/health, /admin
   if (
     path === "/" ||
     path.startsWith("/docs") ||
     path.startsWith("/openapi") ||
-    path === "/api/v1/health"
+    path === "/api/v1/health" ||
+    path.startsWith("/admin")
   ) {
     return await next();
   }
@@ -65,7 +58,7 @@ export const apiKeyAuth = createMiddleware(async (c, next) => {
   }
 
   // 3. Consultar en Supabase PostgreSQL tabla empresas
-  const sql = getSql();
+  const sql = getDb();
   if (sql) {
     try {
       const rows = await sql`

@@ -12,6 +12,8 @@ import { greRouter } from "./routes/gre.js";
 import { resumenesRouter } from "./routes/resumenes.js";
 import { consultasRouter } from "./routes/consultas.js";
 import { sireRouter } from "./routes/sire.js";
+import { adminRouter } from "./routes/admin.js";
+import { adminUiRouter } from "./routes/admin-ui.js";
 
 const app = new Hono();
 
@@ -175,7 +177,10 @@ app.get("/", (c) => {
           <h1>⚡ SUNAT Billing API (Bun + Hono)</h1>
           <p>Microservicio de Facturación Electrónica UBL 2.1, GRE, SIRE y Consultas RUC/DNI en tiempo real.</p>
           <p>API Key por defecto: <code>${env.API_KEY}</code></p>
-          <a href="/docs">📖 Explorar Documentación Swagger / OpenAPI</a>
+          <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+            <a href="/admin" style="background:#0d9488;">🛡️ Abrir Panel Admin</a>
+            <a href="/docs">📖 Explorar Documentación Swagger</a>
+          </div>
         </div>
       </body>
     </html>
@@ -183,6 +188,8 @@ app.get("/", (c) => {
 });
 
 // Mount Routes
+app.route("/admin", adminUiRouter);
+app.route("/api/v1/admin", adminRouter);
 app.route("/api/v1/health", healthRouter);
 app.route("/api/v1/cpe", cpeRouter);
 app.route("/api/v1/gre", greRouter);
@@ -191,6 +198,7 @@ app.route("/api/v1/consultas", consultasRouter);
 app.route("/api/v1/sire", sireRouter);
 
 console.log(`🚀 SUNAT Billing API escuchando en http://localhost:${env.PORT}`);
+console.log(`🛡️ Panel Administrativo UI disponible en http://localhost:${env.PORT}/admin`);
 console.log(`📖 Documentación Swagger OpenAPI disponible en http://localhost:${env.PORT}/docs`);
 
 export default app;
