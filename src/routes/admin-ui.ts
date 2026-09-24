@@ -133,6 +133,10 @@ adminUiRouter.get("/", (c) => {
         <i data-lucide="search" class="w-4 h-4"></i>
         <span>Consultar RUC / DNI</span>
       </button>
+      <button onclick="switchTab('guia')" id="tab-btn-guia" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2 shrink-0">
+        <i data-lucide="book-open-check" class="w-4 h-4 text-emerald-400"></i>
+        <span>Guía de Producción</span>
+      </button>
     </div>
 
     <!-- TAB 1: NEGOCIOS & API KEYS (CRUD COMPLETO) -->
@@ -392,6 +396,238 @@ adminUiRouter.get("/", (c) => {
         </div>
 
         <div id="consulta-result" class="hidden p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2 text-xs"></div>
+      </div>
+    </section>
+
+    <!-- TAB 5: GUÍA PASO A PRODUCCIÓN SUNAT -->
+    <section id="tab-content-guia" class="hidden space-y-6">
+      <!-- HEADER BANNER -->
+      <div class="glass-card p-6 rounded-2xl relative overflow-hidden border border-emerald-500/20 bg-gradient-to-r from-emerald-950/30 via-slate-900 to-slate-900">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="space-y-1">
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-2">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+              <span>Guía Oficial SUNAT UBL 2.1</span>
+            </div>
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+              <span>Cómo Emitir Comprobantes Reales en Producción</span>
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-400 max-w-2xl">
+              Sigue esta guía paso a paso para configurar tu empresa con validez tributaria ante SUNAT (SEE - Del Contribuyente) y emitir tus primeras facturas y boletas legales.
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-3 py-1.5 rounded-xl bg-slate-800 text-xs font-mono text-slate-300 border border-slate-700">
+              Web Service: <span class="text-emerald-400 font-bold">e-factura</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 STEPS GRID -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- PASO 1: REQUISITOS SUNAT -->
+        <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center font-bold text-sm">
+              1
+            </div>
+            <div>
+              <h3 class="font-bold text-white text-sm">Requisitos Previos en SUNAT</h3>
+              <p class="text-xs text-slate-400">Trámites ante SUNAT Operaciones en Línea</p>
+            </div>
+          </div>
+
+          <div class="space-y-3 text-xs text-slate-300">
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-slate-100">RUC Activo y Habido:</b>
+                <p class="text-slate-400 mt-0.5">La empresa debe estar inscrita en Régimen MYPE Tributario, Especial o General.</p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <i data-lucide="user-plus" class="w-4 h-4 text-teal-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-slate-100">Crear Usuario Secundario SOL:</b>
+                <p class="text-slate-400 mt-0.5">En el portal SOL de SUNAT, ve a <i>Administración de Usuarios Secundarios</i> &rarr; <i>Crear Usuario</i>. Asígnale permisos en el menú <b>Comprobantes de Pago Electrónicos (SEE)</b>. Nunca uses tu clave principal.</p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <i data-lucide="award" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-slate-100">Certificado Digital Tributario (CDT):</b>
+                <p class="text-slate-400 mt-0.5">SUNAT otorga un <b>Certificado Digital Gratuito</b> a empresas con ingresos de hasta 300 UIT. Solicítalo en SOL en: <i>Empresas &rarr; Comprobantes de Pago &rarr; Certificado Digital Tributario</i>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PASO 2: REGISTRO EN PANEL -->
+        <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-sm">
+              2
+            </div>
+            <div>
+              <h3 class="font-bold text-white text-sm">Registrar el Negocio en el Panel</h3>
+              <p class="text-xs text-slate-400">Configuración en la pestaña "Negocios & API Keys"</p>
+            </div>
+          </div>
+
+          <div class="space-y-3 text-xs text-slate-300">
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <i data-lucide="search" class="w-4 h-4 text-indigo-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-slate-100">1. Buscar por RUC:</b>
+                <p class="text-slate-400 mt-0.5">Haz clic en <b>"+ Nuevo Negocio"</b>, ingresa el RUC de 11 dígitos y presiona <b>Buscar</b> para autocompletar la Razón Social y Dirección.</p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <i data-lucide="key" class="w-4 h-4 text-indigo-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-slate-100">2. Credenciales SOL Secundarias:</b>
+                <p class="text-slate-400 mt-0.5">Ingresa el nombre del Usuario Secundario (ej. <code class="text-indigo-300">MODFACT1</code>) y su respectiva Clave SOL.</p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/30">
+              <i data-lucide="toggle-right" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-emerald-300">3. Cambiar a PRODUCCIÓN:</b>
+                <p class="text-slate-400 mt-0.5">En el selector de Ambiente, cambia de <b>BETA (Pruebas)</b> a <b>PRODUCCIÓN (Validez Fiscal)</b>. Guarda los cambios y copia la <b>API Key Privada</b> generada (<code class="text-teal-400">sk_live_...</code>).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PASO 3: PRIMERA EMISIÓN -->
+        <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">
+              3
+            </div>
+            <div>
+              <h3 class="font-bold text-white text-sm">Emitir la Primera Prueba Real</h3>
+              <p class="text-xs text-slate-400">Recomendaciones para evitar contingencias</p>
+            </div>
+          </div>
+
+          <div class="space-y-3 text-xs text-slate-300">
+            <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200">
+              <div class="font-semibold flex items-center gap-1.5 mb-1">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400"></i>
+                <span>Recomendación Práctica:</span>
+              </div>
+              <p class="text-xs text-slate-300">
+                Emite primero una <b>Boleta de Venta Electrónica (B001-1)</b> por un monto de <b>S/ 1.00</b> (con concepto "Servicio de prueba de facturación").
+              </p>
+            </div>
+
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <i data-lucide="file-check" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-slate-100">Verificar CDR de SUNAT:</b>
+                <p class="text-slate-400 mt-0.5">Al emitir, SUNAT debe devolver estado <span class="text-emerald-400 font-bold">ACEPTADO</span> con código de respuesta <code class="text-slate-200">0</code>.</p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <i data-lucide="printer" class="w-4 h-4 text-teal-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-slate-100">Auditar en el Historial:</b>
+                <p class="text-slate-400 mt-0.5">En la pestaña <b>Historial de Comprobantes</b> podrás ver el documento registrado en Supabase, descargar el XML firmado y abrir el ticket térmico con su código QR oficial.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PASO 4: SERIES Y ANULACIONES -->
+        <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-sm">
+              4
+            </div>
+            <div>
+              <h3 class="font-bold text-white text-sm">Series, Plazos y Anulaciones</h3>
+              <p class="text-xs text-slate-400">Reglas tributarias esenciales de SUNAT</p>
+            </div>
+          </div>
+
+          <div class="space-y-3 text-xs text-slate-300">
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <i data-lucide="clock" class="w-4 h-4 text-purple-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-slate-100">Plazo de Envío a SUNAT:</b>
+                <p class="text-slate-400 mt-0.5">Las Facturas deben enviarse a SUNAT en un plazo máximo de <b>3 días calendario</b> a partir de la fecha de emisión.</p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <i data-lucide="hash" class="w-4 h-4 text-purple-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-slate-100">Nomenclatura de Series:</b>
+                <p class="text-slate-400 mt-0.5">
+                  &bull; Facturas: <code class="text-purple-300 font-mono">F001</code>, <code class="text-purple-300 font-mono">F002</code>...<br>
+                  &bull; Boletas: <code class="text-purple-300 font-mono">B001</code>, <code class="text-purple-300 font-mono">B002</code>...<br>
+                  &bull; Notas de Crédito: <code class="text-purple-300 font-mono">FC01</code> (Facturas), <code class="text-purple-300 font-mono">BC01</code> (Boletas).
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <i data-lucide="file-x" class="w-4 h-4 text-rose-400 shrink-0 mt-0.5"></i>
+              <div>
+                <b class="text-slate-100">¿Cómo Anular un Comprobante?:</b>
+                <p class="text-slate-400 mt-0.5">Para Facturas y Boletas ya aceptadas por SUNAT, se emite una <b>Nota de Crédito Electrónica</b> con motivo <i>"01: Anulación de la operación"</i>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- EJEMPLO DE CÓDIGO REST API -->
+      <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="terminal" class="w-5 h-5 text-teal-400"></i>
+            <h3 class="font-bold text-white text-sm">Ejemplo de Petición HTTP (Emisión Real vía API)</h3>
+          </div>
+          <button onclick="copyToClipboard(document.getElementById('code-curl-sample').innerText)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-teal-400 text-xs rounded-xl flex items-center gap-1.5 transition">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copiar cURL</span>
+          </button>
+        </div>
+
+        <pre id="code-curl-sample" class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs text-slate-300 overflow-x-auto leading-relaxed">curl -X POST https://sunat-billing-api.vercel.app/api/v1/cpe/emitir \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: sk_live_TU_EMPRESA_KEY" \
+  -d '{
+    "tipoComprobante": "03",
+    "serie": "B001",
+    "numero": 1,
+    "moneda": "PEN",
+    "cliente": {
+      "tipoDoc": "1",
+      "numDoc": "44556677",
+      "nombre": "CLIENTE DE PRUEBA"
+    },
+    "items": [
+      {
+        "sku": "SERV01",
+        "descripcion": "Servicio de prueba de facturación",
+        "cantidad": 1,
+        "precioUnitario": 1.00
+      }
+    ],
+    "medioPago": "efectivo",
+    "enviarASunat": true
+  }'</pre>
       </div>
     </section>
 
@@ -913,9 +1149,11 @@ adminUiRouter.get("/", (c) => {
       document.getElementById("tab-content-comprobantes").classList.add("hidden");
       document.getElementById("tab-content-emisor").classList.add("hidden");
       document.getElementById("tab-content-consultas").classList.add("hidden");
+      document.getElementById("tab-content-guia").classList.add("hidden");
       document.getElementById("tab-content-" + name).classList.remove("hidden");
 
       if (name === "comprobantes") loadComprobantes();
+      lucide.createIcons();
     }
 
     function autoCorrelativo() {
