@@ -183,6 +183,8 @@ app.route("/api/v1/sire", sireRouter);
 console.log(`🚀 SUNAT Billing API escuchando en http://localhost:${env.PORT}`);
 console.log(`📖 Documentación Swagger OpenAPI disponible en http://localhost:${env.PORT}/docs`);
 
+export { app };
+
 export default {
   port: env.PORT,
   fetch: app.fetch,
