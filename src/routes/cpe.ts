@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { EmitCpeSchema } from "../schemas/cpe.schema.js";
 import { env } from "../config/env.js";
+import { registrarComprobante } from "../config/db.js";
 import {
   buildUblXml,
   SunatDocumentData,
@@ -122,6 +123,30 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
 
     const sendRes = await soapClient.sendBill(fileName, zipBuffer);
 
+    await registrarComprobante({
+      empresaId: empresaAuth?.id || null,
+      empresaRuc: emisor.ruc,
+      tipoComprobante: body.tipoComprobante,
+      serie: body.serie,
+      numero: body.numero,
+      fechaEmision,
+      horaEmision,
+      moneda: body.moneda,
+      clienteTipoDoc: body.cliente.tipoDoc,
+      clienteNumDoc: body.cliente.numDoc,
+      clienteNombre: body.cliente.nombre,
+      totalGravadas: docData.totalGravadas,
+      totalIgv: docData.totalIgv,
+      total: docData.totalVenta,
+      estadoSunat: sendRes.success ? "ACEPTADO" : "RECHAZADO",
+      sunatCode: sendRes.responseCode || (sendRes.success ? "0" : "ERROR"),
+      sunatDescription: sendRes.description || sendRes.error || "Procesado por SUNAT",
+      hashSunat: ublResult.hash,
+      qrString: ublResult.qrString,
+      xmlBase64: ublResult.xmlBase64,
+      cdrBase64: sendRes.cdrZipBase64,
+    });
+
     return c.json({
       success: sendRes.success,
       comprobante: `${body.serie}-${body.numero}`,
@@ -146,6 +171,30 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
   }
 
   // Si no envía a SUNAT por red, retorna la estructura lista para ser despachada o firmada
+  await registrarComprobante({
+    empresaId: empresaAuth?.id || null,
+    empresaRuc: emisor.ruc,
+    tipoComprobante: body.tipoComprobante,
+    serie: body.serie,
+    numero: body.numero,
+    fechaEmision,
+    horaEmision,
+    moneda: body.moneda,
+    clienteTipoDoc: body.cliente.tipoDoc,
+    clienteNumDoc: body.cliente.numDoc,
+    clienteNombre: body.cliente.nombre,
+    totalGravadas: docData.totalGravadas,
+    totalIgv: docData.totalIgv,
+    total: docData.totalVenta,
+    estadoSunat: "ACEPTADO",
+    sunatCode: "0",
+    sunatDescription: ublResult.descripcionSunat,
+    hashSunat: ublResult.hash,
+    qrString: ublResult.qrString,
+    xmlBase64: ublResult.xmlBase64,
+    cdrBase64: ublResult.cdrBase64,
+  });
+
   return c.json({
     success: true,
     comprobante: `${body.serie}-${body.numero}`,

@@ -28,9 +28,13 @@ adminUiRouter.get("/", (c) => {
     }
   </script>
   <style>
-    [x-cloak] { display: none !important; }
     .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.7); }
     .glow-hover:hover { box-shadow: 0 0 20px -5px rgba(20, 184, 166, 0.3); }
+    @media print {
+      body * { visibility: hidden; }
+      #printable-ticket, #printable-ticket * { visibility: visible; }
+      #printable-ticket { position: absolute; left: 0; top: 0; width: 80mm; }
+    }
   </style>
 </head>
 <body class="bg-[#0b0f19] text-slate-100 min-h-screen font-sans flex flex-col">
@@ -44,7 +48,7 @@ adminUiRouter.get("/", (c) => {
         </div>
         <div>
           <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-teal-400 to-indigo-300 bg-clip-text text-transparent">SUNAT Cloud Billing</span>
-          <span class="text-xs ml-2 px-2 py-0.5 rounded-full bg-slate-800 text-teal-400 border border-teal-500/20 font-mono">v1.0 Bun</span>
+          <span class="text-xs ml-2 px-2 py-0.5 rounded-full bg-slate-800 text-teal-400 border border-teal-500/20 font-mono">v1.2 SaaS</span>
         </div>
       </div>
 
@@ -52,7 +56,7 @@ adminUiRouter.get("/", (c) => {
         <!-- Sunat Live Status Badge -->
         <div id="sunat-status-badge" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-xs">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span class="text-slate-300">SUNAT Beta:</span>
+          <span class="text-slate-300">SUNAT:</span>
           <span id="sunat-latency" class="font-mono text-emerald-400 font-semibold">...</span>
         </div>
 
@@ -80,16 +84,25 @@ adminUiRouter.get("/", (c) => {
           <i data-lucide="building-2" class="w-4 h-4 text-teal-400"></i>
         </div>
         <div class="text-2xl font-bold text-white" id="stat-total-empresas">0</div>
-        <span class="text-xs text-slate-500">Conectados a Supabase</span>
+        <span class="text-xs text-slate-500">En Supabase PostgreSQL</span>
       </div>
 
       <div class="glass-card p-5 rounded-2xl glow-hover transition">
         <div class="flex items-center justify-between text-slate-400 mb-2">
-          <span class="text-xs font-medium uppercase tracking-wider">Negocios Activos</span>
-          <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+          <span class="text-xs font-medium uppercase tracking-wider">Comprobantes Emitidos</span>
+          <i data-lucide="file-check-2" class="w-4 h-4 text-emerald-400"></i>
         </div>
-        <div class="text-2xl font-bold text-emerald-400" id="stat-activas">0</div>
-        <span class="text-xs text-slate-500">Acceso a emitir comprobantes</span>
+        <div class="text-2xl font-bold text-emerald-400" id="stat-total-comprobantes">0</div>
+        <span class="text-xs text-slate-500">Historial fiscal global</span>
+      </div>
+
+      <div class="glass-card p-5 rounded-2xl glow-hover transition">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-medium uppercase tracking-wider">Monto Total Facturado</span>
+          <i data-lucide="dollar-sign" class="w-4 h-4 text-indigo-400"></i>
+        </div>
+        <div class="text-2xl font-bold text-indigo-400" id="stat-total-monto">S/ 0.00</div>
+        <span class="text-xs text-slate-500">Ventas procesadas</span>
       </div>
 
       <div class="glass-card p-5 rounded-2xl glow-hover transition">
@@ -98,36 +111,31 @@ adminUiRouter.get("/", (c) => {
           <i data-lucide="shield-alert" class="w-4 h-4 text-purple-400"></i>
         </div>
         <div class="text-2xl font-bold text-purple-400" id="stat-sunat-mode">BETA</div>
-        <span class="text-xs text-slate-500">Homologación y pruebas</span>
-      </div>
-
-      <div class="glass-card p-5 rounded-2xl glow-hover transition">
-        <div class="flex items-center justify-between text-slate-400 mb-2">
-          <span class="text-xs font-medium uppercase tracking-wider">Runtime & Servidor</span>
-          <i data-lucide="server" class="w-4 h-4 text-indigo-400"></i>
-        </div>
-        <div class="text-2xl font-bold text-indigo-400">Bun + Hono</div>
-        <span class="text-xs text-slate-500">Vercel Serverless</span>
+        <span class="text-xs text-slate-500">Ambiente de Pruebas</span>
       </div>
     </div>
 
     <!-- TABS NAVIGATION -->
-    <div class="flex items-center gap-2 border-b border-slate-800 mb-6">
-      <button onclick="switchTab('empresas')" id="tab-btn-empresas" class="tab-btn px-4 py-3 text-sm font-semibold border-b-2 border-teal-500 text-teal-400 flex items-center gap-2">
+    <div class="flex items-center gap-2 border-b border-slate-800 mb-6 overflow-x-auto">
+      <button onclick="switchTab('empresas')" id="tab-btn-empresas" class="tab-btn px-4 py-3 text-sm font-semibold border-b-2 border-teal-500 text-teal-400 flex items-center gap-2 shrink-0">
         <i data-lucide="building" class="w-4 h-4"></i>
-        <span>Negocios & API Keys</span>
+        <span>Negocios & API Keys (CRUD)</span>
       </button>
-      <button onclick="switchTab('emisor')" id="tab-btn-emisor" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2">
+      <button onclick="switchTab('comprobantes')" id="tab-btn-comprobantes" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2 shrink-0">
+        <i data-lucide="history" class="w-4 h-4"></i>
+        <span>Historial de Comprobantes</span>
+      </button>
+      <button onclick="switchTab('emisor')" id="tab-btn-emisor" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2 shrink-0">
         <i data-lucide="receipt" class="w-4 h-4"></i>
         <span>Emitir Comprobante (POS)</span>
       </button>
-      <button onclick="switchTab('consultas')" id="tab-btn-consultas" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2">
+      <button onclick="switchTab('consultas')" id="tab-btn-consultas" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2 shrink-0">
         <i data-lucide="search" class="w-4 h-4"></i>
         <span>Consultar RUC / DNI</span>
       </button>
     </div>
 
-    <!-- TAB 1: EMPRESAS & API KEYS -->
+    <!-- TAB 1: NEGOCIOS & API KEYS (CRUD COMPLETO) -->
     <section id="tab-content-empresas" class="space-y-4">
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div class="relative flex-1 max-w-md">
@@ -136,19 +144,19 @@ adminUiRouter.get("/", (c) => {
         </div>
         <button onclick="openModalEmpresa()" class="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-semibold text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-teal-500/20 flex items-center justify-center gap-2 transition">
           <i data-lucide="plus" class="w-4 h-4"></i>
-          <span>Nueva Empresa</span>
+          <span>Nuevo Negocio</span>
         </button>
       </div>
 
-      <!-- TABLE -->
+      <!-- TABLE EMPRESAS -->
       <div class="glass-card rounded-2xl overflow-hidden shadow-xl">
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm text-slate-300">
             <thead class="bg-slate-900/60 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
               <tr>
-                <th class="py-4 px-6">RUC / Empresa</th>
+                <th class="py-4 px-6">Negocio / RUC</th>
                 <th class="py-4 px-6">API Key Privada</th>
-                <th class="py-4 px-6">Usuario SOL</th>
+                <th class="py-4 px-6">Emisiones</th>
                 <th class="py-4 px-6">Modo</th>
                 <th class="py-4 px-6">Estado</th>
                 <th class="py-4 px-6 text-right">Acciones</th>
@@ -164,10 +172,54 @@ adminUiRouter.get("/", (c) => {
       </div>
     </section>
 
-    <!-- TAB 2: EMISOR VISUAL DE COMPROBANTES -->
+    <!-- TAB 2: HISTORIAL DE COMPROBANTES EMITIDOS -->
+    <section id="tab-content-comprobantes" class="hidden space-y-4">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <select id="hist-filter-empresa" onchange="loadComprobantes()" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
+            <option value="">Todas las empresas...</option>
+          </select>
+          <select id="hist-filter-tipo" onchange="loadComprobantes()" class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
+            <option value="">Todos los tipos...</option>
+            <option value="01">Factura (01)</option>
+            <option value="03">Boleta (03)</option>
+            <option value="07">Nota de Crédito (07)</option>
+            <option value="09">Guía Remisión (09)</option>
+          </select>
+          <button onclick="loadComprobantes()" class="p-2 bg-slate-800 hover:bg-slate-700 text-teal-400 rounded-xl transition" title="Refrescar">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- TABLE COMPROBANTES -->
+      <div class="glass-card rounded-2xl overflow-hidden shadow-xl">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-900/60 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th class="py-4 px-6">Comprobante</th>
+                <th class="py-4 px-6">Emisor (RUC)</th>
+                <th class="py-4 px-6">Cliente</th>
+                <th class="py-4 px-6">Fecha</th>
+                <th class="py-4 px-6">Total</th>
+                <th class="py-4 px-6">Estado SUNAT</th>
+                <th class="py-4 px-6 text-right">Archivos / Ticket</th>
+              </tr>
+            </thead>
+            <tbody id="comprobantes-table-body" class="divide-y divide-slate-800/60">
+              <tr>
+                <td colspan="7" class="py-12 text-center text-slate-500">Cargando comprobantes emitidos...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: EMISOR VISUAL DE COMPROBANTES -->
     <section id="tab-content-emisor" class="hidden space-y-6">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- FORMULARIO DE EMISIÓN -->
         <div class="lg:col-span-2 glass-card rounded-2xl p-6 space-y-5">
           <h2 class="text-base font-bold text-white flex items-center gap-2">
             <i data-lucide="file-text" class="w-5 h-5 text-teal-400"></i>
@@ -176,7 +228,7 @@ adminUiRouter.get("/", (c) => {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1">Empresa Emisora</label>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Empresa Emisora *</label>
               <select id="emit-empresa-select" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:border-teal-500 focus:outline-none">
                 <option value="">Seleccione empresa...</option>
               </select>
@@ -323,7 +375,7 @@ adminUiRouter.get("/", (c) => {
       </div>
     </section>
 
-    <!-- TAB 3: CONSULTAS RUC / DNI -->
+    <!-- TAB 4: CONSULTAS RUC / DNI -->
     <section id="tab-content-consultas" class="hidden space-y-6">
       <div class="max-w-2xl mx-auto glass-card rounded-2xl p-6 space-y-6">
         <h2 class="text-base font-bold text-white flex items-center gap-2">
@@ -339,33 +391,32 @@ adminUiRouter.get("/", (c) => {
           </button>
         </div>
 
-        <div id="consulta-result" class="hidden p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2 text-xs">
-          <!-- Live filled by JS -->
-        </div>
+        <div id="consulta-result" class="hidden p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2 text-xs"></div>
       </div>
     </section>
 
   </main>
 
-  <!-- MODAL: NUEVA EMPRESA -->
+  <!-- MODAL: NUEVA / EDITAR EMPRESA -->
   <div id="modal-empresa" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="glass-card bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">
+        <h3 id="modal-empresa-title" class="text-base font-bold text-white flex items-center gap-2">
           <i data-lucide="building-2" class="w-5 h-5 text-teal-400"></i>
-          <span>Registrar Nuevo Negocio / Cliente</span>
+          <span>Registrar Nuevo Negocio</span>
         </h3>
         <button onclick="closeModalEmpresa()" class="text-slate-500 hover:text-white p-1">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
 
-      <form id="form-nueva-empresa" onsubmit="guardarEmpresa(event)" class="space-y-4">
+      <form id="form-empresa" onsubmit="guardarEmpresa(event)" class="space-y-4">
+        <input type="hidden" id="modal-empresa-id">
         <div>
           <label class="block text-xs font-medium text-slate-400 mb-1">RUC (11 dígitos) *</label>
           <div class="flex gap-2">
             <input type="text" id="modal-ruc" maxlength="11" required placeholder="Ej: 20601234567" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm font-mono text-slate-200 focus:border-teal-500 focus:outline-none">
-            <button type="button" onclick="lookupRucInModal()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-teal-400 flex items-center gap-1.5 transition">
+            <button type="button" id="modal-ruc-btn" onclick="lookupRucInModal()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-teal-400 flex items-center gap-1.5 transition">
               <i data-lucide="search" class="w-3.5 h-3.5"></i>
               <span>Buscar</span>
             </button>
@@ -396,11 +447,11 @@ adminUiRouter.get("/", (c) => {
               <option value="false">PRODUCCIÓN (Validez Fiscal)</option>
             </select>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-400 mb-1">Generar API Key</label>
+          <div id="modal-api-key-container">
+            <label class="block text-xs font-medium text-slate-400 mb-1">API Key</label>
             <div class="flex gap-1.5">
               <input type="text" id="modal-api-key" placeholder="Auto-generada..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs font-mono text-slate-200 truncate">
-              <button type="button" onclick="generateRandomApiKey()" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-teal-400" title="Generar nueva clave">
+              <button type="button" onclick="generateRandomApiKey()" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-teal-400" title="Generar clave">
                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
               </button>
             </div>
@@ -412,6 +463,53 @@ adminUiRouter.get("/", (c) => {
           <button type="submit" id="modal-submit-btn" class="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-semibold text-xs px-5 py-2 rounded-xl shadow-lg shadow-teal-500/20">Guardar Negocio</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: VISOR / IMPRESIÓN DE TICKET TÉRMICO -->
+  <div id="modal-ticket" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="glass-card bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="printer" class="w-4 h-4 text-teal-400"></i>
+          <span>Vista de Ticket 80mm</span>
+        </h3>
+        <button onclick="closeModalTicket()" class="text-slate-500 hover:text-white p-1">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- TICKET PREVIEW CANVAS -->
+      <div id="printable-ticket" class="bg-white text-black p-4 rounded-xl font-mono text-[11px] leading-tight space-y-2 shadow-inner">
+        <div class="text-center border-b pb-2">
+          <div class="font-bold text-xs" id="ticket-emisor-razon">EMPRESA S.A.C.</div>
+          <div id="ticket-emisor-ruc">RUC: 20000000001</div>
+          <div class="font-bold text-xs mt-1" id="ticket-tipo-num">BOLETA B001-1</div>
+        </div>
+        <div class="text-[10px] space-y-0.5">
+          <div><b>Fecha:</b> <span id="ticket-fecha">2026-09-24</span></div>
+          <div><b>Cliente:</b> <span id="ticket-cliente-nombre">CLIENTE GENERAL</span></div>
+          <div><b>Doc:</b> <span id="ticket-cliente-doc">72345678</span></div>
+        </div>
+        <div class="border-t border-b py-1.5 space-y-1">
+          <div class="flex justify-between font-bold text-[10px]">
+            <span>TOTAL</span>
+            <span id="ticket-total">S/ 10.00</span>
+          </div>
+        </div>
+        <div class="text-center pt-1">
+          <img id="ticket-qr" src="" alt="QR" class="w-28 h-28 mx-auto">
+          <div class="text-[8px] text-gray-600 mt-1" id="ticket-hash">Hash: ...</div>
+          <div class="text-[9px] font-bold mt-1 text-gray-800">Representación Impresa del CPE</div>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="window.print()" class="flex-1 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="printer" class="w-4 h-4"></i>
+          <span>Imprimir Ticket</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -433,9 +531,10 @@ adminUiRouter.get("/", (c) => {
     </div>
   </div>
 
-  <!-- SCRIPT -->
+  <!-- JAVASCRIPT LOGIC -->
   <script>
     let currentEmpresas = [];
+    let currentComprobantes = [];
     let lastXmlContent = "";
 
     function getAdminKey() {
@@ -468,7 +567,7 @@ adminUiRouter.get("/", (c) => {
     }
 
     async function loadDashboardData() {
-      await Promise.all([loadHealth(), loadEmpresas()]);
+      await Promise.all([loadHealth(), loadEmpresas(), loadComprobantes()]);
     }
 
     async function loadHealth() {
@@ -499,22 +598,45 @@ adminUiRouter.get("/", (c) => {
           currentEmpresas = data.empresas;
           renderEmpresasTable(currentEmpresas);
           populateEmpresasSelect(currentEmpresas);
-          updateKpis(currentEmpresas);
+          updateKpis();
         }
       } catch (e) {
         console.error("Error loading empresas", e);
       }
     }
 
-    function updateKpis(list) {
-      document.getElementById("stat-total-empresas").textContent = list.length;
-      document.getElementById("stat-activas").textContent = list.filter(e => e.activo).length;
+    async function loadComprobantes() {
+      try {
+        const ruc = document.getElementById("hist-filter-empresa")?.value || "";
+        const tipo = document.getElementById("hist-filter-tipo")?.value || "";
+        const url = \`/api/v1/admin/comprobantes?ruc=\${ruc}&tipo=\${tipo}\`;
+
+        const res = await fetch(url, {
+          headers: { "x-api-key": getAdminKey() }
+        });
+        const data = await res.json();
+        if (data.success) {
+          currentComprobantes = data.comprobantes;
+          renderComprobantesTable(currentComprobantes);
+          updateKpis();
+        }
+      } catch (e) {
+        console.error("Error loading comprobantes", e);
+      }
+    }
+
+    function updateKpis() {
+      document.getElementById("stat-total-empresas").textContent = currentEmpresas.length;
+      document.getElementById("stat-total-comprobantes").textContent = currentComprobantes.length;
+
+      const totalMonto = currentComprobantes.reduce((acc, c) => acc + parseFloat(c.total || 0), 0);
+      document.getElementById("stat-total-monto").textContent = "S/ " + totalMonto.toLocaleString("es-PE", { minimumFractionDigits: 2 });
     }
 
     function renderEmpresasTable(list) {
       const tbody = document.getElementById("empresas-table-body");
       if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-500">No hay empresas registradas aún. Haga clic en "+ Nueva Empresa".</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-500">No hay empresas registradas aún. Haga clic en "+ Nuevo Negocio".</td></tr>';
         return;
       }
 
@@ -526,30 +648,86 @@ adminUiRouter.get("/", (c) => {
           </td>
           <td class="py-4 px-6 font-mono text-xs">
             <div class="flex items-center gap-1.5">
-              <span class="text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20 max-w-[160px] truncate" title="\${emp.api_key}">\${emp.api_key}</span>
+              <span class="text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20 max-w-[150px] truncate" title="\${emp.api_key}">\${emp.api_key}</span>
               <button onclick="copyToClipboard('\${emp.api_key}')" class="p-1 hover:text-white text-slate-400 transition" title="Copiar API Key">
                 <i data-lucide="copy" class="w-3.5 h-3.5"></i>
               </button>
             </div>
           </td>
-          <td class="py-4 px-6 font-mono text-xs text-slate-400">\${emp.usuario_sol || 'MODDATOS'}</td>
+          <td class="py-4 px-6">
+            <span class="font-bold text-slate-200">\${emp.total_docs || 0} docs</span>
+            <div class="text-xs text-slate-400 font-mono">S/ \${parseFloat(emp.total_monto || 0).toFixed(2)}</div>
+          </td>
           <td class="py-4 px-6">
             <span class="px-2 py-0.5 rounded-full text-xs font-semibold \${emp.is_beta ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}">
               \${emp.is_beta ? 'BETA' : 'PROD'}
             </span>
           </td>
           <td class="py-4 px-6">
-            <button onclick="toggleEmpresaActive('\${emp.id}')" class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none \${emp.activo ? 'bg-teal-500' : 'bg-slate-700'}">
+            <button onclick="toggleEmpresaActive('\${emp.id}')" class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none \${emp.activo ? 'bg-teal-500' : 'bg-slate-700'}" title="Activar/Desactivar">
               <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out \${emp.activo ? 'translate-x-4' : 'translate-x-0'}"></span>
             </button>
           </td>
           <td class="py-4 px-6 text-right">
-            <button onclick="eliminarEmpresa('\${emp.id}', '\${emp.razon_social}')" class="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition" title="Eliminar Negocio">
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
-            </button>
+            <div class="flex items-center justify-end gap-1">
+              <button onclick="openEditModalEmpresa('\${emp.id}')" class="p-1.5 text-slate-400 hover:text-teal-400 rounded-lg hover:bg-teal-500/10 transition" title="Editar Empresa">
+                <i data-lucide="edit-3" class="w-4 h-4"></i>
+              </button>
+              <button onclick="regenerateApiKey('\${emp.id}', '\${emp.razon_social}')" class="p-1.5 text-slate-400 hover:text-amber-400 rounded-lg hover:bg-amber-500/10 transition" title="Regenerar / Rotar API Key">
+                <i data-lucide="key" class="w-4 h-4"></i>
+              </button>
+              <button onclick="eliminarEmpresa('\${emp.id}', '\${emp.razon_social}')" class="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition" title="Eliminar Negocio">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
           </td>
         </tr>
       \`).join("");
+
+      lucide.createIcons();
+    }
+
+    function renderComprobantesTable(list) {
+      const tbody = document.getElementById("comprobantes-table-body");
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-500">No se han emitido comprobantes aún.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(c => {
+        const tipoLabel = c.tipo_comprobante === "01" ? "Factura" : (c.tipo_comprobante === "03" ? "Boleta" : "CPE");
+        const tipoBadge = c.tipo_comprobante === "01" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" : "bg-teal-500/10 text-teal-400 border border-teal-500/20";
+        return \`
+          <tr class="hover:bg-slate-800/30 transition">
+            <td class="py-4 px-6">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold \${tipoBadge} mr-1">\${tipoLabel}</span>
+              <span class="font-mono font-bold text-slate-100">\${c.serie}-\${c.numero}</span>
+            </td>
+            <td class="py-4 px-6 font-mono text-xs text-slate-300">\${c.empresa_ruc}</td>
+            <td class="py-4 px-6">
+              <div class="text-slate-200 text-xs font-semibold truncate max-w-[180px]">\${c.cliente_nombre || 'VARIOS'}</div>
+              <div class="text-[11px] font-mono text-slate-400">\${c.cliente_num_doc || '00000000'}</div>
+            </td>
+            <td class="py-4 px-6 text-xs text-slate-400 font-mono">\${c.fecha_emision}</td>
+            <td class="py-4 px-6 font-mono font-bold text-slate-100">S/ \${parseFloat(c.total).toFixed(2)}</td>
+            <td class="py-4 px-6">
+              <span class="px-2 py-0.5 rounded-full text-xs font-semibold \${c.estado_sunat === 'ACEPTADO' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}">
+                \${c.estado_sunat}
+              </span>
+            </td>
+            <td class="py-4 px-6 text-right">
+              <div class="flex items-center justify-end gap-1.5">
+                <button onclick="openTicketModal('\${c.id}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-teal-400 rounded-lg transition" title="Ver Ticket">
+                  <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="downloadComprobanteXml('\${c.id}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition" title="Descargar XML">
+                  <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        \`;
+      }).join("");
 
       lucide.createIcons();
     }
@@ -559,12 +737,117 @@ adminUiRouter.get("/", (c) => {
       select.innerHTML = '<option value="">Seleccione empresa emisor...</option>' + list.filter(e => e.activo).map(e => \`
         <option value="\${e.api_key}" data-ruc="\${e.ruc}" data-razon="\${e.razon_social}">\${e.ruc} - \${e.razon_social}</option>
       \`).join("");
+
+      const filterSelect = document.getElementById("hist-filter-empresa");
+      if (filterSelect) {
+        filterSelect.innerHTML = '<option value="">Todas las empresas...</option>' + list.map(e => \`
+          <option value="\${e.ruc}">\${e.ruc} - \${e.razon_social}</option>
+        \`).join("");
+      }
     }
 
     function filterEmpresas() {
       const term = document.getElementById("search-empresa-input").value.toLowerCase();
       const filtered = currentEmpresas.filter(e => e.ruc.includes(term) || e.razon_social.toLowerCase().includes(term));
       renderEmpresasTable(filtered);
+    }
+
+    // CRUD ACTIONS
+    function openModalEmpresa() {
+      document.getElementById("modal-empresa-id").value = "";
+      document.getElementById("modal-empresa-title").innerHTML = '<i data-lucide="building-2" class="w-5 h-5 text-teal-400"></i><span>Registrar Nuevo Negocio</span>';
+      document.getElementById("modal-ruc").value = "";
+      document.getElementById("modal-ruc").disabled = false;
+      document.getElementById("modal-ruc-btn").classList.remove("hidden");
+      document.getElementById("modal-razon").value = "";
+      document.getElementById("modal-usuario-sol").value = "MODDATOS";
+      document.getElementById("modal-clave-sol").value = "MODDATOS";
+      document.getElementById("modal-is-beta").value = "true";
+      document.getElementById("modal-api-key-container").classList.remove("hidden");
+      generateRandomApiKey();
+      document.getElementById("modal-empresa").classList.remove("hidden");
+      lucide.createIcons();
+    }
+
+    function openEditModalEmpresa(id) {
+      const emp = currentEmpresas.find(e => e.id === id);
+      if (!emp) return;
+
+      document.getElementById("modal-empresa-id").value = emp.id;
+      document.getElementById("modal-empresa-title").innerHTML = '<i data-lucide="edit" class="w-5 h-5 text-teal-400"></i><span>Editar Negocio: ' + emp.razon_social + '</span>';
+      document.getElementById("modal-ruc").value = emp.ruc;
+      document.getElementById("modal-ruc").disabled = true;
+      document.getElementById("modal-ruc-btn").classList.add("hidden");
+      document.getElementById("modal-razon").value = emp.razon_social;
+      document.getElementById("modal-usuario-sol").value = emp.usuario_sol || "MODDATOS";
+      document.getElementById("modal-clave-sol").value = emp.clave_sol || "MODDATOS";
+      document.getElementById("modal-is-beta").value = emp.is_beta ? "true" : "false";
+      document.getElementById("modal-api-key-container").classList.add("hidden");
+      document.getElementById("modal-empresa").classList.remove("hidden");
+      lucide.createIcons();
+    }
+
+    function closeModalEmpresa() {
+      document.getElementById("modal-empresa").classList.add("hidden");
+    }
+
+    async function guardarEmpresa(e) {
+      e.preventDefault();
+      const id = document.getElementById("modal-empresa-id").value;
+      const ruc = document.getElementById("modal-ruc").value.trim();
+      const razonSocial = document.getElementById("modal-razon").value.trim();
+      const usuarioSol = document.getElementById("modal-usuario-sol").value.trim();
+      const claveSol = document.getElementById("modal-clave-sol").value.trim();
+      const isBeta = document.getElementById("modal-is-beta").value === "true";
+      const apiKey = document.getElementById("modal-api-key").value.trim();
+
+      const btn = document.getElementById("modal-submit-btn");
+      btn.disabled = true;
+      btn.textContent = "Guardando...";
+
+      const url = id ? \`/api/v1/admin/empresas/\${id}\` : "/api/v1/admin/empresas";
+      const method = id ? "PUT" : "POST";
+      const payload = id ? { razonSocial, usuarioSol, claveSol, isBeta } : { ruc, razonSocial, usuarioSol, claveSol, isBeta, apiKey };
+
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json", "x-api-key": getAdminKey() },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          closeModalEmpresa();
+          await loadEmpresas();
+        } else {
+          alert(data.error || "Error al procesar negocio");
+        }
+      } catch (err) {
+        alert("Error de conexión");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Guardar Negocio";
+      }
+    }
+
+    async function regenerateApiKey(id, razon) {
+      if (!confirm(\`¿Regenerar la API Key de "\${razon}"?\\nLa clave anterior dejará de funcionar inmediatamente.\`)) return;
+
+      try {
+        const res = await fetch(\`/api/v1/admin/empresas/\${id}/regenerate-key\`, {
+          method: "POST",
+          headers: { "x-api-key": getAdminKey() }
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(\`¡Nueva API Key generada con éxito!\\n\\n\${data.api_key}\`);
+          await loadEmpresas();
+        } else {
+          alert(data.error || "Error al rotar clave");
+        }
+      } catch (e) {
+        alert("Error de conexión");
+      }
     }
 
     async function toggleEmpresaActive(id) {
@@ -580,7 +863,7 @@ adminUiRouter.get("/", (c) => {
     }
 
     async function eliminarEmpresa(id, razon) {
-      if (!confirm(\`¿Eliminar el negocio "\${razon}"?\`)) return;
+      if (!confirm(\`¿Eliminar definitivamente el negocio "\${razon}"?\`)) return;
       try {
         const res = await fetch(\`/api/v1/admin/empresas/\${id}\`, {
           method: "DELETE",
@@ -590,14 +873,6 @@ adminUiRouter.get("/", (c) => {
       } catch (e) {
         alert("Error al eliminar");
       }
-    }
-
-    function openModalEmpresa() {
-      generateRandomApiKey();
-      document.getElementById("modal-empresa").classList.remove("hidden");
-    }
-    function closeModalEmpresa() {
-      document.getElementById("modal-empresa").classList.add("hidden");
     }
 
     function generateRandomApiKey() {
@@ -625,41 +900,7 @@ adminUiRouter.get("/", (c) => {
       }
     }
 
-    async function guardarEmpresa(e) {
-      e.preventDefault();
-      const ruc = document.getElementById("modal-ruc").value.trim();
-      const razonSocial = document.getElementById("modal-razon").value.trim();
-      const usuarioSol = document.getElementById("modal-usuario-sol").value.trim();
-      const claveSol = document.getElementById("modal-clave-sol").value.trim();
-      const isBeta = document.getElementById("modal-is-beta").value === "true";
-      const apiKey = document.getElementById("modal-api-key").value.trim();
-
-      const btn = document.getElementById("modal-submit-btn");
-      btn.disabled = true;
-      btn.textContent = "Guardando...";
-
-      try {
-        const res = await fetch("/api/v1/admin/empresas", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-api-key": getAdminKey() },
-          body: JSON.stringify({ ruc, razonSocial, usuarioSol, claveSol, isBeta, apiKey })
-        });
-        const data = await res.json();
-        if (data.success) {
-          closeModalEmpresa();
-          await loadEmpresas();
-        } else {
-          alert(data.error || "Error al registrar");
-        }
-      } catch (err) {
-        alert("Error de conexión");
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Guardar Negocio";
-      }
-    }
-
-    // POS / EMISOR TABS & LOGIC
+    // TABS LOGIC
     function switchTab(name) {
       document.querySelectorAll(".tab-btn").forEach(b => {
         b.classList.remove("border-teal-500", "text-teal-400");
@@ -669,9 +910,12 @@ adminUiRouter.get("/", (c) => {
       document.getElementById("tab-btn-" + name).classList.remove("border-transparent", "text-slate-400");
 
       document.getElementById("tab-content-empresas").classList.add("hidden");
+      document.getElementById("tab-content-comprobantes").classList.add("hidden");
       document.getElementById("tab-content-emisor").classList.add("hidden");
       document.getElementById("tab-content-consultas").classList.add("hidden");
       document.getElementById("tab-content-" + name).classList.remove("hidden");
+
+      if (name === "comprobantes") loadComprobantes();
     }
 
     function autoCorrelativo() {
@@ -809,14 +1053,12 @@ adminUiRouter.get("/", (c) => {
           document.getElementById("res-hash").textContent = data.hashSunat;
           document.getElementById("res-estado").textContent = data.sunatResponse?.estado || "ACEPTADO";
 
-          // QR Code API
           const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent(data.qrString);
           document.getElementById("res-qr-img").src = qrUrl;
 
           lastXmlContent = data.xmlBase64 ? atob(data.xmlBase64) : "";
-
-          // Incrementar correlativo
           document.getElementById("emit-numero").value = numero + 1;
+          await loadComprobantes();
         } else {
           alert(data.error || "Error al emitir comprobante");
         }
@@ -826,6 +1068,63 @@ adminUiRouter.get("/", (c) => {
         btn.disabled = false;
         btn.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i><span>Generar Comprobante</span>';
         lucide.createIcons();
+      }
+    }
+
+    // TICKET MODAL PREVIEW
+    async function openTicketModal(id) {
+      try {
+        const res = await fetch(\`/api/v1/admin/comprobantes/\${id}\`, {
+          headers: { "x-api-key": getAdminKey() }
+        });
+        const data = await res.json();
+        if (data.success && data.comprobante) {
+          const c = data.comprobante;
+          const emp = currentEmpresas.find(e => e.ruc === c.empresa_ruc);
+
+          document.getElementById("ticket-emisor-razon").textContent = emp?.razon_social || "EMPRESA FISCAL S.A.C.";
+          document.getElementById("ticket-emisor-ruc").textContent = "RUC: " + c.empresa_ruc;
+          document.getElementById("ticket-tipo-num").textContent = (c.tipo_comprobante === "01" ? "FACTURA " : "BOLETA ") + c.serie + "-" + c.numero;
+          document.getElementById("ticket-fecha").textContent = c.fecha_emision + " " + (c.hora_emision || "");
+          document.getElementById("ticket-cliente-nombre").textContent = c.cliente_nombre || "CLIENTES VARIOS";
+          document.getElementById("ticket-cliente-doc").textContent = c.cliente_num_doc || "00000000";
+          document.getElementById("ticket-total").textContent = "S/ " + parseFloat(c.total).toFixed(2);
+          document.getElementById("ticket-hash").textContent = "Hash: " + (c.hash_sunat || "---");
+
+          if (c.qr_string) {
+            document.getElementById("ticket-qr").src = "https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=" + encodeURIComponent(c.qr_string);
+          }
+
+          document.getElementById("modal-ticket").classList.remove("hidden");
+          lucide.createIcons();
+        }
+      } catch (e) {
+        alert("Error al cargar ticket");
+      }
+    }
+
+    function closeModalTicket() {
+      document.getElementById("modal-ticket").classList.add("hidden");
+    }
+
+    async function downloadComprobanteXml(id) {
+      try {
+        const res = await fetch(\`/api/v1/admin/comprobantes/\${id}\`, {
+          headers: { "x-api-key": getAdminKey() }
+        });
+        const data = await res.json();
+        if (data.success && data.comprobante?.xml_base64) {
+          const xml = atob(data.comprobante.xml_base64);
+          const blob = new Blob([xml], { type: "application/xml" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = \`\${data.comprobante.empresa_ruc}-\${data.comprobante.tipo_comprobante}-\${data.comprobante.serie}-\${data.comprobante.numero}.xml\`;
+          a.click();
+        } else {
+          alert("XML no disponible");
+        }
+      } catch (e) {
+        alert("Error al descargar XML");
       }
     }
 
@@ -885,7 +1184,6 @@ adminUiRouter.get("/", (c) => {
       alert("¡API Key copiada al portapapeles!");
     }
 
-    // Init on load
     document.addEventListener("DOMContentLoaded", () => {
       lucide.createIcons();
       checkAuth();
