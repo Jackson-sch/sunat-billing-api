@@ -1,5 +1,5 @@
 import { createMiddleware } from "hono/factory";
-import { env } from "@/config/env";
+import { env } from "../config/env";
 
 /**
  * Middleware para validar la clave de autenticación API Key

@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { EmitGreSchema } from "@/schemas/gre.schema";
-import { env } from "@/config/env";
-import { buildGreXml, GreDocumentData, GreItem } from "@/core";
+import { EmitGreSchema } from "../schemas/gre.schema";
+import { env } from "../config/env";
+import { buildGreXml, GreDocumentData, GreItem } from "../core";
 
 export const greRouter = new Hono();
 

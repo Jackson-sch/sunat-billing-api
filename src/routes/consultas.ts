@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { ConsultaRucSchema, ConsultaDniSchema } from "@/schemas/consultas.schema";
+import { ConsultaRucSchema, ConsultaDniSchema } from "../schemas/consultas.schema";
 
 export const consultasRouter = new Hono();
 

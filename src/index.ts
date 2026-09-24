@@ -3,15 +3,15 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
 import { apiReference } from "@scalar/hono-api-reference";
-import { env } from "@/config/env";
-import { apiKeyAuth } from "@/middlewares/auth";
-import { errorHandler } from "@/middlewares/error-handler";
-import { healthRouter } from "@/routes/health";
-import { cpeRouter } from "@/routes/cpe";
-import { greRouter } from "@/routes/gre";
-import { resumenesRouter } from "@/routes/resumenes";
-import { consultasRouter } from "@/routes/consultas";
-import { sireRouter } from "@/routes/sire";
+import { env } from "./config/env";
+import { apiKeyAuth } from "./middlewares/auth";
+import { errorHandler } from "./middlewares/error-handler";
+import { healthRouter } from "./routes/health";
+import { cpeRouter } from "./routes/cpe";
+import { greRouter } from "./routes/gre";
+import { resumenesRouter } from "./routes/resumenes";
+import { consultasRouter } from "./routes/consultas";
+import { sireRouter } from "./routes/sire";
 
 const app = new Hono();
 
