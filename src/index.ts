@@ -24,6 +24,8 @@ app.onError(errorHandler);
 
 // OpenAPI Specification Route
 app.get("/openapi.json", (c) => {
+  const origin = new URL(c.req.url).origin;
+
   return c.json({
     openapi: "3.1.0",
     info: {
@@ -38,8 +40,16 @@ app.get("/openapi.json", (c) => {
     },
     servers: [
       {
+        url: origin,
+        description: "Servidor Activo",
+      },
+      {
+        url: "https://sunat-billing-api.vercel.app",
+        description: "Producción (Vercel)",
+      },
+      {
         url: `http://localhost:${env.PORT}`,
-        description: "Servidor Local de Desarrollo (Bun)",
+        description: "Desarrollo Local (Bun)",
       },
     ],
     components: {
