@@ -1,14 +1,14 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { EmitCpeSchema } from "../schemas/cpe.schema";
-import { env } from "../config/env";
+import { EmitCpeSchema } from "../schemas/cpe.schema.js";
+import { env } from "../config/env.js";
 import {
   buildUblXml,
   SunatDocumentData,
   SunatItem,
   SunatSoapClient,
   createSunatZip,
-} from "../core";
+} from "../core/index.js";
 
 export const cpeRouter = new Hono();
 

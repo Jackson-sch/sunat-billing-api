@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { GreDocumentData, SunatEmitResult } from "./types";
+import { GreDocumentData, SunatEmitResult } from "./types.js";
 
 /**
  * Constructor de XML UBL 2.1 para Guía de Remisión Electrónica Remitente (GRE - Tipo 09)

@@ -3,14 +3,14 @@ import { zValidator } from "@hono/zod-validator";
 import {
   ResumenDiarioSchema,
   ComunicacionBajaSchema,
-} from "../schemas/resumenes.schema";
-import { env } from "../config/env";
+} from "../schemas/resumenes.schema.js";
+import { env } from "../config/env.js";
 import {
   buildResumenDiarioXml,
   buildComunicacionBajasXml,
   SunatSoapClient,
   createSunatZip,
-} from "../core";
+} from "../core/index.js";
 
 export const resumenesRouter = new Hono();
 

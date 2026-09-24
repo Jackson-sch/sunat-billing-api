@@ -1,5 +1,5 @@
-import { SunatDocumentData, SunatEmitResult } from "./types";
-import { generateDigestHash, generateSunatQrString, normalizeCustomerDocType } from "./xml-signer";
+import { SunatDocumentData, SunatEmitResult } from "./types.js";
+import { generateDigestHash, generateSunatQrString, normalizeCustomerDocType } from "./xml-signer.js";
 
 /**
  * Constructor de XML UBL 2.1 estándar SUNAT

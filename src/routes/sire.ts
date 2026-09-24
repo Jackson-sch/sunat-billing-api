@@ -6,7 +6,7 @@ import {
   buildSireComprasFilename,
   SireVentaRecord,
   SireCompraRecord,
-} from "../core";
+} from "../core/index.js";
 
 export const sireRouter = new Hono();
 

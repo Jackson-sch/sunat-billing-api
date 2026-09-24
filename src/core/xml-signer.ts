@@ -1,4 +1,4 @@
-import { SunatDocumentData } from "./types";
+import { SunatDocumentData } from "./types.js";
 import crypto from "crypto";
 
 /**

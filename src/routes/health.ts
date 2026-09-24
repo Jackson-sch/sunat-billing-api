@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { env } from "../config/env";
-import { SUNAT_ENDPOINTS } from "../core/soap-client";
+import { env } from "../config/env.js";
+import { SUNAT_ENDPOINTS } from "../core/soap-client.js";
 
 export const healthRouter = new Hono();
 
