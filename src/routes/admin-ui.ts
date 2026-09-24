@@ -49,24 +49,38 @@ adminUiRouter.get("/", (c) => {
           <i data-lucide="shield-check" class="w-7 h-7 text-white"></i>
         </div>
         <h2 class="text-xl font-bold text-white tracking-tight">Acceso Administrativo</h2>
-        <p class="text-xs text-slate-400">Ingrese la Master API Key de su servidor para acceder al panel de control.</p>
+        <p class="text-xs text-slate-400">Ingrese sus credenciales de administrador para acceder al panel de control.</p>
       </div>
 
       <!-- ALERTA DE ERROR -->
       <div id="login-error-alert" class="hidden p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
         <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
-        <span id="login-error-msg">Clave maestra inválida. Acceso denegado.</span>
+        <span id="login-error-msg">Usuario o contraseña incorrectos.</span>
       </div>
 
       <form onsubmit="handleAdminLogin(event)" class="space-y-4">
         <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1.5">Master API Key</label>
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Usuario</label>
           <div class="relative">
-            <input type="password" id="login-input-key" required placeholder="sk_live_..." autocomplete="current-password" class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-4 pr-11 py-3 text-sm font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-teal-500 transition">
-            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3 top-3 text-slate-500 hover:text-slate-300 transition" title="Mostrar/Ocultar">
+            <input type="text" id="login-input-user" value="admin" required placeholder="admin" autocomplete="username" class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-teal-500 transition">
+            <i data-lucide="user" class="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5"></i>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-medium text-slate-300">Contraseña</label>
+          </div>
+          <div class="relative">
+            <input type="password" id="login-input-pass" required placeholder="••••••••" autocomplete="current-password" class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-11 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-teal-500 transition">
+            <i data-lucide="lock" class="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5"></i>
+            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-300 transition" title="Mostrar/Ocultar">
               <i id="eye-icon" data-lucide="eye" class="w-4 h-4"></i>
             </button>
           </div>
+          <p class="text-[11px] text-slate-500 mt-1.5">
+            Usuario: <span class="text-teal-400 font-mono">admin</span> &bull; Clave: <span class="text-teal-400 font-mono">ADMIN_PASSWORD</span> o <span class="text-teal-400 font-mono">API_KEY</span>
+          </p>
         </div>
 
         <button type="submit" id="login-btn-submit" class="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-semibold text-sm py-3 rounded-xl shadow-lg shadow-teal-500/20 flex items-center justify-center gap-2 transition hover:-translate-y-0.5">
@@ -828,7 +842,7 @@ adminUiRouter.get("/", (c) => {
     }
 
     function togglePasswordVisibility() {
-      const input = document.getElementById("login-input-key");
+      const input = document.getElementById("login-input-pass");
       const icon = document.getElementById("eye-icon");
       if (input.type === "password") {
         input.type = "text";
@@ -866,8 +880,9 @@ adminUiRouter.get("/", (c) => {
 
     async function handleAdminLogin(e) {
       e.preventDefault();
-      const input = document.getElementById("login-input-key").value.trim();
-      if (!input) return;
+      const username = document.getElementById("login-input-user").value.trim();
+      const password = document.getElementById("login-input-pass").value.trim();
+      if (!password) return;
 
       const btn = document.getElementById("login-btn-submit");
       const btnText = document.getElementById("login-btn-text");
@@ -876,23 +891,26 @@ adminUiRouter.get("/", (c) => {
 
       alertBox.classList.add("hidden");
       btn.disabled = true;
-      btnText.textContent = "Verificando credencial...";
+      btnText.textContent = "Iniciando sesión...";
 
       try {
-        const res = await fetch("/api/v1/admin/empresas", {
-          headers: { "x-api-key": input }
+        const res = await fetch("/api/v1/admin/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
         });
+        const data = await res.json();
 
-        if (res.ok) {
-          sessionStorage.setItem("sunat_admin_key", input);
-          localStorage.setItem("sunat_admin_key", input);
+        if (res.ok && data.success && data.token) {
+          sessionStorage.setItem("sunat_admin_key", data.token);
+          localStorage.setItem("sunat_admin_key", data.token);
           showAdminApp();
           loadDashboardData();
         } else {
           alertBox.classList.remove("hidden");
-          alertMsg.textContent = "Master API Key incorrecta. Acceso denegado por el servidor.";
-          document.getElementById("login-input-key").focus();
-          document.getElementById("login-input-key").select();
+          alertMsg.textContent = data.error || "Usuario o contraseña incorrectos.";
+          document.getElementById("login-input-pass").focus();
+          document.getElementById("login-input-pass").select();
         }
       } catch (err) {
         alertBox.classList.remove("hidden");
@@ -907,7 +925,7 @@ adminUiRouter.get("/", (c) => {
     function logoutAdmin() {
       sessionStorage.removeItem("sunat_admin_key");
       localStorage.removeItem("sunat_admin_key");
-      document.getElementById("login-input-key").value = "";
+      document.getElementById("login-input-pass").value = "";
       showLoginScreen();
     }
 

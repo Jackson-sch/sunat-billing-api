@@ -15,13 +15,14 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache
 export const apiKeyAuth = createMiddleware(async (c, next) => {
   const path = c.req.path;
 
-  // Rutas públicas: /, /docs, /openapi.json, /api/v1/health, /admin
+  // Rutas públicas: /, /docs, /openapi.json, /api/v1/health, /admin, /api/v1/admin/login
   if (
     path === "/" ||
     path.startsWith("/docs") ||
     path.startsWith("/openapi") ||
     path === "/api/v1/health" ||
-    path.startsWith("/admin")
+    path.startsWith("/admin") ||
+    path === "/api/v1/admin/login"
   ) {
     return await next();
   }

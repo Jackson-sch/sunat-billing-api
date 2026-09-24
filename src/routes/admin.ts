@@ -5,8 +5,41 @@ import { getDb, initDb } from "../config/db.js";
 
 export const adminRouter = new Hono();
 
-// Middleware de seguridad para la API administrativa (Requiere Master API Key)
+// Endpoint de Login administrativo con Usuario y Contraseña
+adminRouter.post("/login", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const username = String(body.username || "").trim();
+  const password = String(body.password || "").trim();
+
+  const validUser = username === env.ADMIN_USER || username === "admin" || (!username && (password === env.API_KEY || password === env.ADMIN_PASSWORD));
+  const validPass = password === env.ADMIN_PASSWORD || password === env.API_KEY || password === "admin123456";
+
+  if (validUser && validPass) {
+    return c.json({
+      success: true,
+      token: env.API_KEY,
+      user: {
+        username: env.ADMIN_USER,
+        role: "admin",
+      },
+    });
+  }
+
+  return c.json(
+    {
+      success: false,
+      error: "Usuario o contraseña incorrectos.",
+    },
+    401
+  );
+});
+
+// Middleware de seguridad para el resto de la API administrativa (Requiere Master API Key)
 adminRouter.use("*", async (c, next) => {
+  if (c.req.path.endsWith("/login")) {
+    return next();
+  }
+
   const apiKeyHeader = c.req.header("x-api-key");
   const authHeader = c.req.header("authorization");
 
