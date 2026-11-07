@@ -46,6 +46,13 @@ export const EmitCpeSchema = z.object({
   cliente: ClienteSchema,
   items: z.array(CpeItemSchema).min(1, "Debe incluir al menos un ítem"),
   medioPago: z.enum(["efectivo", "tarjeta", "yape", "plin", "transferencia", "credito", "mixto"]).default("efectivo"),
+  certificado: z
+    .object({
+      base64: z.string().optional(),
+      password: z.string().optional(),
+      path: z.string().optional(),
+    })
+    .optional(),
   documentoModificado: z
     .object({
       tipoDoc: z.enum(["01", "03"]),

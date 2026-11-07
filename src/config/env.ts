@@ -12,6 +12,7 @@ export const env = {
   SUNAT_CLAVE_SOL: process.env.SUNAT_CLAVE_SOL || "MODDATOS",
   SUNAT_CERT_PATH: process.env.SUNAT_CERT_PATH || "./certs/certificate.pfx",
   SUNAT_CERT_PASSWORD: process.env.SUNAT_CERT_PASSWORD || "",
+  SUNAT_CERT_BASE64: process.env.SUNAT_CERT_BASE64 || "",
 
   // Supabase Database Connection
   POSTGRES_URL:

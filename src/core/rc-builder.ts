@@ -1,3 +1,5 @@
+import { CertificateOptions, signXml } from "./xml-signer.js";
+
 /**
  * Constructor de Resumen Diario de Boletas Electrónicas (RC) SUNAT UBL 2.1
  * Estándar: SummaryDocuments / Catálogo SUNAT Tipo RC
@@ -31,11 +33,7 @@ export interface ResumenDiarioInput {
   items: ResumenBoletaItem[];
 }
 
-export function buildResumenDiarioXml(data: ResumenDiarioInput): { xml: string; hashSunat: string } {
-  const hashMock = Buffer.from(`${data.resumenId}-${data.fechaEmisionComprobantes}-${Date.now()}`)
-    .toString("base64")
-    .substring(0, 28);
-
+export function buildResumenDiarioXml(data: ResumenDiarioInput, certOptions?: CertificateOptions): { xml: string; hashSunat: string } {
   const linesXml = data.items
     .map((item) => `
     <sac:SummaryDocumentsLine>
@@ -79,13 +77,7 @@ export function buildResumenDiarioXml(data: ResumenDiarioInput): { xml: string; 
     xmlns:sac="urn:sunat:names:specification:ubl:peru:schema:xsd:SunatAggregateComponents-1">
     <ext:UBLExtensions>
         <ext:UBLExtension>
-            <ext:ExtensionContent>
-                <ds:Signature Id="Signature-SunatBilling">
-                    <ds:SignedInfo>
-                        <ds:DigestValue>${hashMock}</ds:DigestValue>
-                    </ds:SignedInfo>
-                </ds:Signature>
-            </ext:ExtensionContent>
+            <ext:ExtensionContent/>
         </ext:UBLExtension>
     </ext:UBLExtensions>
     <cbc:UBLVersionID>2.0</cbc:UBLVersionID>
@@ -121,5 +113,7 @@ export function buildResumenDiarioXml(data: ResumenDiarioInput): { xml: string; 
     ${linesXml}
 </SummaryDocuments>`;
 
-  return { xml, hashSunat: hashMock };
+  const signResult = signXml(xml, certOptions);
+
+  return { xml: signResult.signedXml, hashSunat: signResult.digestValue };
 }

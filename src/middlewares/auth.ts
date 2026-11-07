@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { env } from "../config/env.js";
-import { getDb } from "../config/db.js";
+import { buscarEmpresaPorApiKey } from "../config/db.js";
 
 // Cache en memoria para no saturar la base de datos (Token -> { empresa, expiresAt })
 const API_KEY_CACHE = new Map<string, { empresa: any; expiresAt: number }>();
@@ -58,29 +58,19 @@ export const apiKeyAuth = createMiddleware(async (c, next) => {
     return await next();
   }
 
-  // 3. Consultar en Supabase PostgreSQL tabla empresas
-  const sql = getDb();
-  if (sql) {
-    try {
-      const rows = await sql`
-        SELECT id, ruc, razon_social, usuario_sol, clave_sol, is_beta, activo
-        FROM empresas
-        WHERE api_key = ${token} AND activo = true
-        LIMIT 1
-      `;
-
-      if (rows && rows.length > 0) {
-        const empresa = rows[0];
-        API_KEY_CACHE.set(token, {
-          empresa,
-          expiresAt: Date.now() + CACHE_TTL_MS,
-        });
-        c.set("empresa", empresa);
-        return await next();
-      }
-    } catch (err: any) {
-      console.error("Error al validar API key en Supabase:", err.message || err);
+  // 3. Consultar en Base de Datos (Supabase PostgreSQL o SQLite Local)
+  try {
+    const empresa = await buscarEmpresaPorApiKey(token);
+    if (empresa) {
+      API_KEY_CACHE.set(token, {
+        empresa,
+        expiresAt: Date.now() + CACHE_TTL_MS,
+      });
+      c.set("empresa", empresa);
+      return await next();
     }
+  } catch (err: any) {
+    console.error("Error al validar API key en Base de Datos:", err.message || err);
   }
 
   return c.json(

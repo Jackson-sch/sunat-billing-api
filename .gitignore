@@ -30,5 +30,19 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # IntelliJ based IDEs
 .idea
 
+# Certificates and Keys
+certs/
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Local SQLite databases
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
 # Finder (MacOS) folder config
 .DS_Store

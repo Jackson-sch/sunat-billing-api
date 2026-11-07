@@ -1,11 +1,11 @@
-import crypto from "crypto";
 import { GreDocumentData, SunatEmitResult } from "./types.js";
+import { CertificateOptions, signXml } from "./xml-signer.js";
 
 /**
  * Constructor de XML UBL 2.1 para Guía de Remisión Electrónica Remitente (GRE - Tipo 09)
  * Conforme a la normativa SUNAT RS 000123-2022/SUNAT y estándar OASIS UBL 2.1 DespatchAdvice.
  */
-export function buildGreXml(data: GreDocumentData): SunatEmitResult {
+export function buildGreXml(data: GreDocumentData, certOptions?: CertificateOptions): SunatEmitResult {
   const isTransportePrivado = data.modalidadTransporte === "02";
   const numStr = data.numero.toString().padStart(8, "0");
   const docId = `${data.serie}-${numStr}`;
@@ -19,21 +19,7 @@ export function buildGreXml(data: GreDocumentData): SunatEmitResult {
                 xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
   <ext:UBLExtensions>
     <ext:UBLExtension>
-      <ext:ExtensionContent>
-        <ds:Signature Id="Signature-SunatBilling">
-          <ds:SignedInfo>
-            <ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
-            <ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
-            <ds:Reference URI="">
-              <ds:Transforms>
-                <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
-              </ds:Transforms>
-              <ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
-              <ds:DigestValue>${crypto.createHash("sha256").update(docId).digest("base64").substring(0, 28)}</ds:DigestValue>
-            </ds:Reference>
-          </ds:SignedInfo>
-        </ds:Signature>
-      </ext:ExtensionContent>
+      <ext:ExtensionContent/>
     </ext:UBLExtension>
   </ext:UBLExtensions>
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
@@ -146,14 +132,15 @@ export function buildGreXml(data: GreDocumentData): SunatEmitResult {
     .join("")}
 </DespatchAdvice>`;
 
-  const hash = crypto.createHash("sha256").update(xml).digest("base64").substring(0, 28);
+  const signResult = signXml(xml, certOptions);
+  const hash = signResult.digestValue;
   const qrString = `${data.remitente.ruc}|09|${data.serie}|${numStr}|${data.pesoBrutoTotal}|${data.totalBultos}|${data.fechaEmision}|${data.destinatario.tipoDoc}|${data.destinatario.numDoc}|${hash}|`;
 
   return {
     success: true,
     comprobante: docId,
     tipoComprobante: "09",
-    xmlBase64: Buffer.from(xml, "utf-8").toString("base64"),
+    xmlBase64: Buffer.from(signResult.signedXml, "utf-8").toString("base64"),
     hash,
     qrString,
     codigoSunatRespuesta: "0",

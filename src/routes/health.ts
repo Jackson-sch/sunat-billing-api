@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { env } from "../config/env.js";
+import { isDbConnected, getDbEngine } from "../config/db.js";
 import { SUNAT_ENDPOINTS } from "../core/soap-client.js";
 
 export const healthRouter = new Hono();
@@ -23,6 +24,9 @@ healthRouter.get("/", async (c) => {
     sunatStatus = "caido";
   }
 
+  const dbConnected = isDbConnected();
+  const dbEngine = getDbEngine();
+
   return c.json({
     success: true,
     service: "sunat-billing-api",
@@ -34,6 +38,10 @@ healthRouter.get("/", async (c) => {
       status: sunatStatus,
       latencyMs: sunatPingMs,
       rucEmisorDefault: env.SUNAT_RUC,
+    },
+    database: {
+      connected: dbConnected,
+      engine: dbEngine,
     },
     uptimeSeconds: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),

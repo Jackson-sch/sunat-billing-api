@@ -104,8 +104,13 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
     documentoModificado: body.documentoModificado,
   };
 
-  // 1. Construir XML UBL 2.1 y firma digital
-  const ublResult = buildUblXml(docData);
+  // 1. Construir XML UBL 2.1 y firma digital XMLDSig
+  const certOptions = {
+    certPath: body.certificado?.path,
+    certPassword: body.certificado?.password,
+    certBase64: body.certificado?.base64 || empresaAuth?.certificado_pfx,
+  };
+  const ublResult = buildUblXml(docData, certOptions);
 
   // 2. Si se solicita envío directo a SUNAT
   if (body.enviarASunat) {

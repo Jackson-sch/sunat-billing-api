@@ -1,19 +1,17 @@
 import { SunatDocumentData, SunatEmitResult } from "./types.js";
-import { generateDigestHash, generateSunatQrString, normalizeCustomerDocType } from "./xml-signer.js";
+import { CertificateOptions, generateSunatQrString, normalizeCustomerDocType, signXml } from "./xml-signer.js";
 
 /**
- * Constructor de XML UBL 2.1 estándar SUNAT
+ * Constructor de XML UBL 2.1 estándar SUNAT con Firma Digital XMLDSig
  * Cumple con la Resolución de Superintendencia N.° 097-2012/SUNAT y modificatorias.
  */
-export function buildUblXml(data: SunatDocumentData): SunatEmitResult {
+export function buildUblXml(data: SunatDocumentData, certOptions?: CertificateOptions): SunatEmitResult {
   const isCreditNote = data.tipoComprobante === "07";
   const isDebitNote = data.tipoComprobante === "08";
   const rootTag = isCreditNote ? "CreditNote" : isDebitNote ? "DebitNote" : "Invoice";
   const customDocType = isCreditNote || isDebitNote ? "2.0" : "2.1";
 
   const customerDocType = normalizeCustomerDocType(data.cliente.tipoDoc);
-  const hash = generateDigestHash(`${data.serie}-${data.numero}-${data.totalVenta}-${data.fechaEmision}`);
-  const qrString = generateSunatQrString(data, hash);
 
   const itemsXml = data.items
     .map((item, idx) => {
@@ -70,22 +68,7 @@ export function buildUblXml(data: SunatDocumentData): SunatEmitResult {
   xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
   <ext:UBLExtensions>
     <ext:UBLExtension>
-      <ext:ExtensionContent>
-        <ds:Signature Id="Signature-SunatBilling">
-          <ds:SignedInfo>
-            <ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
-            <ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
-            <ds:Reference URI="">
-              <ds:Transforms>
-                <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
-              </ds:Transforms>
-              <ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
-              <ds:DigestValue>${hash}</ds:DigestValue>
-            </ds:Reference>
-          </ds:SignedInfo>
-          <ds:SignatureValue>MIIB...[FIRMA_DIGITAL_XMLDSIG]...==</ds:SignatureValue>
-        </ds:Signature>
-      </ext:ExtensionContent>
+      <ext:ExtensionContent/>
     </ext:UBLExtension>
   </ext:UBLExtensions>
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
@@ -191,13 +174,18 @@ export function buildUblXml(data: SunatDocumentData): SunatEmitResult {
   ${itemsXml}
 </${rootTag}>`;
 
+  // Aplicar Firma Digital XMLDSig oficial conforme al estándar SUNAT UBL 2.1
+  const signResult = signXml(xml, certOptions);
+  const hash = signResult.digestValue;
+  const qrString = generateSunatQrString(data, hash);
+
   const tipoNombre = data.tipoComprobante === "01" ? "Factura" : data.tipoComprobante === "07" ? "Nota de Crédito" : data.tipoComprobante === "08" ? "Nota de Débito" : "Boleta";
 
   return {
     success: true,
     comprobante: `${data.serie}-${data.numero}`,
     tipoComprobante: data.tipoComprobante,
-    xmlBase64: Buffer.from(xml, "utf-8").toString("base64"),
+    xmlBase64: Buffer.from(signResult.signedXml, "utf-8").toString("base64"),
     hash,
     qrString,
     codigoSunatRespuesta: "0",

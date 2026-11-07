@@ -1,3 +1,5 @@
+import { CertificateOptions, signXml } from "./xml-signer.js";
+
 /**
  * Constructor de Comunicación de Bajas (RA) SUNAT UBL 2.1
  * Estándar: VoidedDocuments / Catálogo SUNAT Tipo RA
@@ -21,11 +23,7 @@ export interface ComunicacionBajaInput {
   items: BajaDocumentoItem[];
 }
 
-export function buildComunicacionBajasXml(data: ComunicacionBajaInput): { xml: string; hashSunat: string } {
-  const hashMock = Buffer.from(`${data.bajaId}-${data.fechaEmisionDocumentos}-${Date.now()}`)
-    .toString("base64")
-    .substring(0, 28);
-
+export function buildComunicacionBajasXml(data: ComunicacionBajaInput, certOptions?: CertificateOptions): { xml: string; hashSunat: string } {
   const linesXml = data.items
     .map((item) => `
     <sac:VoidedDocumentsLine>
@@ -46,13 +44,7 @@ export function buildComunicacionBajasXml(data: ComunicacionBajaInput): { xml: s
     xmlns:sac="urn:sunat:names:specification:ubl:peru:schema:xsd:SunatAggregateComponents-1">
     <ext:UBLExtensions>
         <ext:UBLExtension>
-            <ext:ExtensionContent>
-                <ds:Signature Id="Signature-SunatBilling">
-                    <ds:SignedInfo>
-                        <ds:DigestValue>${hashMock}</ds:DigestValue>
-                    </ds:SignedInfo>
-                </ds:Signature>
-            </ext:ExtensionContent>
+            <ext:ExtensionContent/>
         </ext:UBLExtension>
     </ext:UBLExtensions>
     <cbc:UBLVersionID>2.0</cbc:UBLVersionID>
@@ -88,5 +80,7 @@ export function buildComunicacionBajasXml(data: ComunicacionBajaInput): { xml: s
     ${linesXml}
 </VoidedDocuments>`;
 
-  return { xml, hashSunat: hashMock };
+  const signResult = signXml(xml, certOptions);
+
+  return { xml: signResult.signedXml, hashSunat: signResult.digestValue };
 }
