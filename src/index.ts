@@ -375,4 +375,5 @@ console.log(`🚀 SUNAT Billing API escuchando en http://localhost:${env.PORT}`)
 console.log(`🛡️ Panel Administrativo UI disponible en http://localhost:${env.PORT}/admin`);
 console.log(`📖 Documentación Swagger OpenAPI disponible en http://localhost:${env.PORT}/docs`);
 
+export { app };
 export default app;

@@ -1,44 +1,249 @@
-import { SQL } from "bun";
-import { Database } from "bun:sqlite";
+import os from "os";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import postgres from "postgres";
 import { env } from "./env.js";
 
-let sqlInstance: SQL | null = null;
-let sqliteInstance: Database | null = null;
+let sqlInstance: any = null;
+let sqliteInstance: any = null;
 let initialized = false;
 
-export function getDb(): SQL | null {
+function loadBunSqliteClass(): any {
+  if (typeof (globalThis as any).Bun !== "undefined") {
+    try {
+      const req = (globalThis as any).require || (typeof require !== "undefined" ? require : null);
+      if (req) {
+        return req("bun:sqlite").Database;
+      }
+    } catch (e) {
+      console.warn("No se pudo cargar bun:sqlite:", e);
+    }
+  }
+  return null;
+}
+
+class MemoryDbFallback {
+  private empresas: Map<string, any> = new Map();
+  private comprobantes: any[] = [];
+
+  constructor() {
+    this.empresas.set(env.SUNAT_RUC, {
+      id: "env-default",
+      ruc: env.SUNAT_RUC,
+      razon_social: "EMPRESA POR DEFECTO (.ENV)",
+      api_key: env.API_KEY,
+      usuario_sol: env.SUNAT_USUARIO_SOL,
+      clave_sol: env.SUNAT_CLAVE_SOL,
+      is_beta: 1,
+      activo: 1,
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  run(query: string, params: any[] = []) {
+    const q = query.trim().toUpperCase();
+    if (q.startsWith("INSERT INTO EMPRESAS") || q.startsWith("INSERT OR IGNORE INTO EMPRESAS")) {
+      if (params.length === 6) {
+        const [id, ruc, razon_social, api_key, usuario_sol, clave_sol] = params;
+        if (!this.empresas.has(ruc)) {
+          this.empresas.set(ruc, {
+            id,
+            ruc,
+            razon_social,
+            api_key,
+            usuario_sol,
+            clave_sol,
+            is_beta: 1,
+            activo: 1,
+            created_at: new Date().toISOString(),
+          });
+        }
+      } else {
+        const [id, ruc, razon_social, api_key, usuario_sol, clave_sol, is_beta, created_at] = params;
+        this.empresas.set(ruc, {
+          id,
+          ruc,
+          razon_social,
+          api_key,
+          usuario_sol,
+          clave_sol,
+          is_beta,
+          activo: 1,
+          created_at: created_at || new Date().toISOString(),
+        });
+      }
+    } else if (q.startsWith("INSERT INTO COMPROBANTES")) {
+      const [
+        id, empresa_id, empresa_ruc, tipo_comprobante, serie, numero, fecha_emision, hora_emision,
+        moneda, cliente_tipo_doc, cliente_num_doc, cliente_nombre, total_gravadas, total_igv, total,
+        estado_sunat, sunat_code, sunat_description, hash_sunat, qr_string, xml_base64, cdr_base64
+      ] = params;
+      this.comprobantes.unshift({
+        id,
+        empresa_id,
+        empresa_ruc,
+        tipo_comprobante,
+        serie,
+        numero,
+        fecha_emision,
+        hora_emision,
+        moneda,
+        cliente_tipo_doc,
+        cliente_num_doc,
+        cliente_nombre,
+        total_gravadas,
+        total_igv,
+        total,
+        estado_sunat,
+        sunat_code,
+        sunat_description,
+        hash_sunat,
+        qr_string,
+        xml_base64,
+        cdr_base64,
+        created_at: new Date().toISOString(),
+      });
+    } else if (q.startsWith("UPDATE EMPRESAS")) {
+      if (params.length === 5) {
+        const [razon_social, usuario_sol, clave_sol, is_beta, id] = params;
+        for (const emp of this.empresas.values()) {
+          if (emp.id === id) {
+            emp.razon_social = razon_social;
+            emp.usuario_sol = usuario_sol;
+            emp.clave_sol = clave_sol;
+            emp.is_beta = is_beta;
+          }
+        }
+      } else if (params.length === 2) {
+        const [val, id] = params;
+        for (const emp of this.empresas.values()) {
+          if (emp.id === id) {
+            if (typeof val === "string") emp.api_key = val;
+            else emp.activo = val;
+          }
+        }
+      }
+    } else if (q.startsWith("DELETE FROM EMPRESAS")) {
+      const [id] = params;
+      for (const [k, emp] of this.empresas.entries()) {
+        if (emp.id === id) this.empresas.delete(k);
+      }
+    }
+  }
+
+  query(query: string) {
+    const q = query.trim().toUpperCase();
+    const self = this;
+    return {
+      get(...params: any[]) {
+        if (q.includes("COUNT(*)")) {
+          return { c: self.empresas.size };
+        }
+        if (q.includes("FROM EMPRESAS WHERE ID = ?")) {
+          for (const emp of self.empresas.values()) {
+            if (emp.id === params[0]) return emp;
+          }
+          return null;
+        }
+        if (q.includes("FROM EMPRESAS WHERE API_KEY = ?")) {
+          for (const emp of self.empresas.values()) {
+            if (emp.api_key === params[0] && emp.activo) return emp;
+          }
+          return null;
+        }
+        if (q.includes("FROM COMPROBANTES")) {
+          if (params.length === 3) {
+            const [id, serie, numero] = params;
+            return self.comprobantes.find((c) => c.id === id || (c.serie === serie && c.numero === numero)) || null;
+          }
+          return self.comprobantes.find((c) => c.id === params[0]) || null;
+        }
+        return null;
+      },
+      all(...params: any[]) {
+        if (q.includes("FROM EMPRESAS")) {
+          return Array.from(self.empresas.values()).map((emp) => {
+            const docs = self.comprobantes.filter((c) => c.empresa_ruc === emp.ruc);
+            const totalMonto = docs.reduce((acc, d) => acc + Number(d.total || 0), 0);
+            return {
+              ...emp,
+              total_docs: docs.length,
+              total_monto: Number(totalMonto.toFixed(2)),
+            };
+          });
+        }
+        if (q.includes("FROM COMPROBANTES")) {
+          let list = [...self.comprobantes];
+          if (params.length === 2) {
+            list = list.filter((c) => c.empresa_ruc === params[0] && c.tipo_comprobante === params[1]);
+          } else if (params.length === 1) {
+            list = list.filter((c) => c.empresa_ruc === params[0]);
+          }
+          return list.slice(0, 100);
+        }
+        return [];
+      },
+    };
+  }
+}
+
+export function getDb(): any {
   if (!sqlInstance && env.POSTGRES_URL) {
     try {
-      sqlInstance = new SQL(env.POSTGRES_URL);
+      sqlInstance = postgres(env.POSTGRES_URL, {
+        max: 5,
+        idle_timeout: 20,
+        connect_timeout: 10,
+        ssl: env.POSTGRES_URL.includes("localhost") ? false : "require",
+      });
     } catch (e) {
-      console.error("Error al inicializar cliente SQL de Bun (PostgreSQL):", e);
+      console.error("Error al inicializar cliente PostgreSQL:", e);
     }
   }
   return sqlInstance;
 }
 
-export function getSqlite(): Database {
+export function getSqlite(): any {
   if (!sqliteInstance) {
-    const dataDir = path.resolve(process.cwd(), "data");
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+    const BunDbClass = loadBunSqliteClass();
+    if (BunDbClass) {
+      try {
+        const isServerless = !!(
+          process.env.VERCEL ||
+          process.env.AWS_LAMBDA_FUNCTION_NAME ||
+          process.env.LAMBDA_TASK_ROOT
+        );
+        const dataDir = isServerless ? os.tmpdir() : path.resolve(process.cwd(), "data");
+        if (!fs.existsSync(dataDir)) {
+          fs.mkdirSync(dataDir, { recursive: true });
+        }
+        const dbPath = path.join(dataDir, "billing.sqlite");
+        sqliteInstance = new BunDbClass(dbPath, { create: true });
+        sqliteInstance.run("PRAGMA journal_mode = WAL;");
+      } catch (err) {
+        console.warn("No se pudo abrir SQLite en disco, intentando SQLite en memoria (:memory:):", err);
+        try {
+          sqliteInstance = new BunDbClass(":memory:");
+        } catch {
+          sqliteInstance = new MemoryDbFallback();
+        }
+      }
+    } else {
+      sqliteInstance = new MemoryDbFallback();
     }
-    const dbPath = path.join(dataDir, "billing.sqlite");
-    sqliteInstance = new Database(dbPath, { create: true });
-    sqliteInstance.run("PRAGMA journal_mode = WAL;");
   }
   return sqliteInstance;
 }
 
 export function isDbConnected(): boolean {
-  return !!getDb() || true; // SQLite siempre disponible localmente
+  return !!getDb() || true;
 }
 
 export function getDbEngine(): string {
-  return getDb() ? "PostgreSQL (Supabase)" : "SQLite Local (data/billing.sqlite)";
+  if (getDb()) return "PostgreSQL (Supabase)";
+  if (sqliteInstance instanceof MemoryDbFallback) return "In-Memory Fallback (Serverless)";
+  return "SQLite Local (data/billing.sqlite)";
 }
 
 /**
@@ -615,6 +820,18 @@ export async function eliminarEmpresa(id: string): Promise<boolean> {
 }
 
 export async function buscarEmpresaPorApiKey(apiKey: string): Promise<any | null> {
+  if (apiKey === env.API_KEY) {
+    return {
+      id: "env-default",
+      ruc: env.SUNAT_RUC,
+      razon_social: "EMPRESA POR DEFECTO (.ENV)",
+      usuario_sol: env.SUNAT_USUARIO_SOL,
+      clave_sol: env.SUNAT_CLAVE_SOL,
+      is_beta: env.SUNAT_ENV === "beta",
+      activo: 1,
+    };
+  }
+
   await initDb();
   const sql = getDb();
 
