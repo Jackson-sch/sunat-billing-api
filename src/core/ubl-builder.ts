@@ -73,7 +73,7 @@ export function buildUblXml(data: SunatDocumentData, certOptions?: CertificateOp
   </ext:UBLExtensions>
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>${customDocType}</cbc:CustomizationID>
-  <cbc:ID>${data.serie}-${data.numero}</cbc:ID>
+  <cbc:ID>${data.serie}-${String(data.numero).padStart(8, "0")}</cbc:ID>
   <cbc:IssueDate>${data.fechaEmision}</cbc:IssueDate>
   <cbc:IssueTime>${data.horaEmision}</cbc:IssueTime>
   <cbc:${isCreditNote ? "CreditNoteTypeCode" : isDebitNote ? "DebitNoteTypeCode" : "InvoiceTypeCode"} listID="0101">${data.tipoComprobante}</cbc:${isCreditNote ? "CreditNoteTypeCode" : isDebitNote ? "DebitNoteTypeCode" : "InvoiceTypeCode"}>
