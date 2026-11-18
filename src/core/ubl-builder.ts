@@ -9,7 +9,6 @@ export function buildUblXml(data: SunatDocumentData, certOptions?: CertificateOp
   const isCreditNote = data.tipoComprobante === "07";
   const isDebitNote = data.tipoComprobante === "08";
   const rootTag = isCreditNote ? "CreditNote" : isDebitNote ? "DebitNote" : "Invoice";
-  const customDocType = isCreditNote || isDebitNote ? "2.0" : "2.1";
 
   const customerDocType = normalizeCustomerDocType(data.cliente.tipoDoc);
 
@@ -72,7 +71,7 @@ export function buildUblXml(data: SunatDocumentData, certOptions?: CertificateOp
     </ext:UBLExtension>
   </ext:UBLExtensions>
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
-  <cbc:CustomizationID>${customDocType}</cbc:CustomizationID>
+  <cbc:CustomizationID>2.0</cbc:CustomizationID>
   <cbc:ID>${data.serie}-${String(data.numero).padStart(8, "0")}</cbc:ID>
   <cbc:IssueDate>${data.fechaEmision}</cbc:IssueDate>
   <cbc:IssueTime>${data.horaEmision}</cbc:IssueTime>
