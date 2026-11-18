@@ -6,3 +6,5 @@ export * from "./rc-builder.js";
 export * from "./ra-builder.js";
 export * from "./sire-generator.js";
 export * from "./soap-client.js";
+export * from "./number-to-words.js";
+export * from "./pdf-generator.js";

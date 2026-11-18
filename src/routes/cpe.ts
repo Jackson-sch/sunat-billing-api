@@ -2,13 +2,15 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { EmitCpeSchema } from "../schemas/cpe.schema.js";
 import { env } from "../config/env.js";
-import { registrarComprobante } from "../config/db.js";
+import { registrarComprobante, obtenerComprobantePorId } from "../config/db.js";
 import {
   buildUblXml,
   SunatDocumentData,
   SunatItem,
   SunatSoapClient,
   createSunatZip,
+  generateInvoicePdf,
+  parseUblXmlToPdfData,
 } from "../core/index.js";
 
 export const cpeRouter = new Hono();
@@ -152,6 +154,40 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
       cdrBase64: sendRes.cdrZipBase64,
     });
 
+    // Generar PDF (A4 o Ticket)
+    const formatoPdf = (body.formatoPdf || c.req.query("pdf") || "a4") as "a4" | "ticket" | "ticket58";
+    const pdfBuffer = await generateInvoicePdf(
+      {
+        tipoComprobante: body.tipoComprobante,
+        serie: body.serie,
+        numero: body.numero,
+        fechaEmision,
+        horaEmision,
+        moneda: body.moneda,
+        emisor,
+        cliente: body.cliente,
+        items: body.items.map((i) => ({
+          cantidad: i.cantidad,
+          unidadMedida: i.unidadMedida,
+          descripcion: i.descripcion,
+          precioUnitario: i.precioUnitario,
+          total: +(i.cantidad * i.precioUnitario).toFixed(2),
+        })),
+        totales: {
+          gravadas: docData.totalGravadas,
+          exoneradas: docData.totalExoneradas,
+          inafectas: docData.totalInafectas,
+          igv: docData.totalIgv,
+          total: docData.totalVenta,
+        },
+        medioPago: body.medioPago,
+        hashSunat: ublResult.hash,
+        qrString: ublResult.qrString,
+      },
+      formatoPdf
+    );
+    const pdfBase64 = pdfBuffer.toString("base64");
+
     return c.json({
       success: sendRes.success,
       comprobante: `${body.serie}-${body.numero}`,
@@ -160,6 +196,7 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
       qrString: ublResult.qrString,
       xmlBase64: ublResult.xmlBase64,
       cdrBase64: sendRes.cdrZipBase64,
+      pdfBase64,
       sunatResponse: {
         code: sendRes.responseCode || (sendRes.success ? "0" : "ERROR"),
         message: sendRes.description || sendRes.error || "Procesado por SUNAT",
@@ -200,6 +237,40 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
     cdrBase64: ublResult.cdrBase64,
   });
 
+  // Generar PDF (A4 o Ticket)
+  const formatoPdf = (body.formatoPdf || c.req.query("pdf") || "a4") as "a4" | "ticket" | "ticket58";
+  const pdfBuffer = await generateInvoicePdf(
+    {
+      tipoComprobante: body.tipoComprobante,
+      serie: body.serie,
+      numero: body.numero,
+      fechaEmision,
+      horaEmision,
+      moneda: body.moneda,
+      emisor,
+      cliente: body.cliente,
+      items: body.items.map((i) => ({
+        cantidad: i.cantidad,
+        unidadMedida: i.unidadMedida,
+        descripcion: i.descripcion,
+        precioUnitario: i.precioUnitario,
+        total: +(i.cantidad * i.precioUnitario).toFixed(2),
+      })),
+      totales: {
+        gravadas: docData.totalGravadas,
+        exoneradas: docData.totalExoneradas,
+        inafectas: docData.totalInafectas,
+        igv: docData.totalIgv,
+        total: docData.totalVenta,
+      },
+      medioPago: body.medioPago,
+      hashSunat: ublResult.hash,
+      qrString: ublResult.qrString,
+    },
+    formatoPdf
+  );
+  const pdfBase64 = pdfBuffer.toString("base64");
+
   return c.json({
     success: true,
     comprobante: `${body.serie}-${body.numero}`,
@@ -208,6 +279,7 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
     qrString: ublResult.qrString,
     xmlBase64: ublResult.xmlBase64,
     cdrBase64: ublResult.cdrBase64,
+    pdfBase64,
     sunatResponse: {
       code: "0",
       message: ublResult.descripcionSunat,
@@ -219,6 +291,70 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
       inafectas: docData.totalInafectas,
       igv: docData.totalIgv,
       total: docData.totalVenta,
+    },
+  });
+});
+
+/**
+ * GET /api/v1/cpe/:id/pdf - Descarga o previsualiza el PDF oficial (A4 o Ticket 80mm/58mm)
+ * Parámetros query: format=a4 (por defecto) | format=ticket | format=ticket58
+ */
+cpeRouter.get("/:id/pdf", async (c) => {
+  const id = c.req.param("id");
+  const format = (c.req.query("format") || "a4").toLowerCase() as "a4" | "ticket" | "ticket58";
+
+  const comp = await obtenerComprobantePorId(id);
+  if (!comp) {
+    return c.json({ success: false, error: "Comprobante no encontrado." }, 404);
+  }
+
+  let pdfData;
+  if (comp.xml_base64) {
+    const xmlContent = Buffer.from(comp.xml_base64, "base64").toString("utf-8");
+    pdfData = parseUblXmlToPdfData(xmlContent, {
+      tipoComprobante: comp.tipo_comprobante,
+      serie: comp.serie,
+      numero: comp.numero,
+      fechaEmision: comp.fecha_emision,
+      horaEmision: comp.hora_emision,
+      moneda: comp.moneda,
+      emisor: { ruc: comp.empresa_ruc, razonSocial: "EMPRESA FISCAL S.A.C." },
+      cliente: { numDoc: comp.cliente_num_doc, nombre: comp.cliente_nombre },
+      totales: { gravadas: comp.total_gravadas, igv: comp.total_igv, total: comp.total },
+      hashSunat: comp.hash_sunat,
+      qrString: comp.qr_string,
+    });
+  } else {
+    pdfData = {
+      tipoComprobante: comp.tipo_comprobante,
+      serie: comp.serie,
+      numero: comp.numero,
+      fechaEmision: comp.fecha_emision,
+      horaEmision: comp.hora_emision || "00:00:00",
+      moneda: comp.moneda || "PEN",
+      emisor: { ruc: comp.empresa_ruc, razonSocial: "EMPRESA FISCAL S.A.C." },
+      cliente: { numDoc: comp.cliente_num_doc || "00000000", nombre: comp.cliente_nombre || "CLIENTES VARIOS" },
+      items: [],
+      totales: {
+        gravadas: comp.total_gravadas || 0,
+        igv: comp.total_igv || 0,
+        total: comp.total,
+      },
+      hashSunat: comp.hash_sunat,
+      qrString: comp.qr_string,
+    };
+  }
+
+  const pdfBuffer = await generateInvoicePdf(pdfData, format);
+  const numPadded = String(comp.numero).padStart(8, "0");
+  const fileName = `${comp.serie}-${numPadded}.pdf`;
+
+  return new Response(new Uint8Array(pdfBuffer), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="${fileName}"`,
+      "Content-Length": String(pdfBuffer.length),
     },
   });
 });

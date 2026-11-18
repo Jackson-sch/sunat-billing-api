@@ -61,6 +61,7 @@ export const EmitCpeSchema = z.object({
       motivoDescripcion: z.string(),
     })
     .optional(),
+  formatoPdf: z.enum(["a4", "ticket", "ticket58"]).optional().default("a4"),
   enviarASunat: z.boolean().default(false), // true = Envía vía SOAP a SUNAT/OSE, false = Solo firma y retorna XML
 });
 

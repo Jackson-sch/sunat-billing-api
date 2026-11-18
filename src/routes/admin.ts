@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import crypto from "crypto";
 import { env } from "../config/env.js";
+import { generateInvoicePdf, parseUblXmlToPdfData } from "../core/index.js";
 import {
   obtenerEmpresas,
   crearEmpresa,
@@ -251,6 +252,73 @@ adminRouter.get("/comprobantes/:id", async (c) => {
     }
 
     return c.json({ success: true, comprobante: row });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * GET /api/v1/admin/comprobantes/:id/pdf - Descarga o previsualiza el PDF desde el panel admin
+ */
+adminRouter.get("/comprobantes/:id/pdf", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const format = (c.req.query("format") || "a4").toLowerCase() as "a4" | "ticket" | "ticket58";
+
+    const comp = await obtenerComprobantePorId(id);
+    if (!comp) {
+      return c.json({ success: false, error: "Comprobante no encontrado." }, 404);
+    }
+
+    let pdfData;
+    if (comp.xml_base64) {
+      const xmlContent = Buffer.from(comp.xml_base64, "base64").toString("utf-8");
+      pdfData = parseUblXmlToPdfData(xmlContent, {
+        tipoComprobante: comp.tipo_comprobante,
+        serie: comp.serie,
+        numero: comp.numero,
+        fechaEmision: comp.fecha_emision,
+        horaEmision: comp.hora_emision,
+        moneda: comp.moneda,
+        emisor: { ruc: comp.empresa_ruc, razonSocial: "EMPRESA FISCAL S.A.C." },
+        cliente: { numDoc: comp.cliente_num_doc, nombre: comp.cliente_nombre },
+        totales: { gravadas: comp.total_gravadas, igv: comp.total_igv, total: comp.total },
+        hashSunat: comp.hash_sunat,
+        qrString: comp.qr_string,
+      });
+    } else {
+      pdfData = {
+        tipoComprobante: comp.tipo_comprobante,
+        serie: comp.serie,
+        numero: comp.numero,
+        fechaEmision: comp.fecha_emision,
+        horaEmision: comp.hora_emision || "00:00:00",
+        moneda: comp.moneda || "PEN",
+        emisor: { ruc: comp.empresa_ruc, razonSocial: "EMPRESA FISCAL S.A.C." },
+        cliente: { numDoc: comp.cliente_num_doc || "00000000", nombre: comp.cliente_nombre || "CLIENTES VARIOS" },
+        items: [],
+        totales: {
+          gravadas: comp.total_gravadas || 0,
+          igv: comp.total_igv || 0,
+          total: comp.total,
+        },
+        hashSunat: comp.hash_sunat,
+        qrString: comp.qr_string,
+      };
+    }
+
+    const pdfBuffer = await generateInvoicePdf(pdfData, format);
+    const numPadded = String(comp.numero).padStart(8, "0");
+    const fileName = `${comp.serie}-${numPadded}.pdf`;
+
+    return new Response(new Uint8Array(pdfBuffer), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="${fileName}"`,
+        "Content-Length": String(pdfBuffer.length),
+      },
+    });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);
   }

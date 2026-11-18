@@ -351,10 +351,27 @@ export async function obtenerComprobantePorId(id: string): Promise<any | null> {
   await initDb();
   const sql = getDb();
 
+  let serie = "";
+  let numero = -1;
+  if (id.includes("-") && id.length < 20) {
+    const parts = id.split("-");
+    serie = parts[0] || "";
+    numero = parseInt(parts[1] || "", 10) || -1;
+  }
+
   if (sql) {
     try {
-      const [row] = await sql`SELECT * FROM comprobantes WHERE id = ${id} LIMIT 1`;
-      if (row) return row;
+      if (serie && numero !== -1) {
+        const [row] = await sql`
+          SELECT * FROM comprobantes 
+          WHERE id::text = ${id} OR (serie = ${serie} AND numero = ${numero})
+          LIMIT 1
+        `;
+        if (row) return row;
+      } else {
+        const [row] = await sql`SELECT * FROM comprobantes WHERE id::text = ${id} LIMIT 1`;
+        if (row) return row;
+      }
     } catch (err: any) {
       console.warn("Error al obtener comprobante en Postgres:", err.message || err);
     }
@@ -362,6 +379,11 @@ export async function obtenerComprobantePorId(id: string): Promise<any | null> {
 
   try {
     const sqlite = getSqlite();
+    if (serie && numero !== -1) {
+      return (
+        sqlite.query("SELECT * FROM comprobantes WHERE id = ? OR (serie = ? AND numero = ?) LIMIT 1").get(id, serie, numero) || null
+      );
+    }
     return sqlite.query("SELECT * FROM comprobantes WHERE id = ? LIMIT 1").get(id) || null;
   } catch (err: any) {
     console.error("Error al obtener comprobante en SQLite:", err.message || err);

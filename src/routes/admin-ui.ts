@@ -565,13 +565,23 @@ adminUiRouter.get("/", (c) => {
                   <span>Ver / Imprimir Ticket Térmico</span>
                 </button>
                 <div class="flex gap-2">
+                  <button type="button" onclick="downloadLastPdf('a4')" class="flex-1 py-2 px-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs text-indigo-300 border border-indigo-500/30 rounded-xl flex items-center justify-center gap-1.5 font-semibold transition">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                    <span>PDF A4</span>
+                  </button>
+                  <button type="button" onclick="downloadLastPdf('ticket')" class="flex-1 py-2 px-2 bg-amber-500/10 hover:bg-amber-500/20 text-xs text-amber-300 border border-amber-500/30 rounded-xl flex items-center justify-center gap-1.5 font-semibold transition">
+                    <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+                    <span>PDF Ticket</span>
+                  </button>
+                </div>
+                <div class="flex gap-2">
                   <button type="button" onclick="copyXmlBase64()" class="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 rounded-xl flex items-center justify-center gap-1.5 transition">
                     <i data-lucide="copy" class="w-3.5 h-3.5 text-teal-400"></i>
                     <span>Copiar XML</span>
                   </button>
                   <button type="button" onclick="downloadXmlFile()" class="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-xs text-teal-300 rounded-xl flex items-center justify-center gap-1.5 font-semibold transition">
                     <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                    <span>Descargar</span>
+                    <span>Descargar XML</span>
                   </button>
                 </div>
               </div>
@@ -984,7 +994,15 @@ adminUiRouter.get("/", (c) => {
       <div class="flex gap-2 pt-1">
         <button onclick="window.print()" class="flex-1 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition shadow-lg shadow-teal-500/20">
           <i data-lucide="printer" class="w-4 h-4"></i>
-          <span>Imprimir Ticket</span>
+          <span>Imprimir</span>
+        </button>
+        <button onclick="downloadCurrentTicketPdf('ticket')" class="px-3 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition border border-slate-700" title="Descargar PDF Ticket">
+          <i data-lucide="receipt" class="w-4 h-4"></i>
+          <span>PDF Ticket</span>
+        </button>
+        <button onclick="downloadCurrentTicketPdf('a4')" class="px-3 bg-slate-800 hover:bg-slate-700 text-indigo-400 font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition border border-slate-700" title="Descargar PDF A4">
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+          <span>PDF A4</span>
         </button>
       </div>
     </div>
@@ -1447,8 +1465,14 @@ adminUiRouter.get("/", (c) => {
             </td>
             <td class="py-4 px-6 text-right">
               <div class="flex items-center justify-end gap-1.5">
-                <button onclick="openTicketModal('\${c.id}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-teal-400 rounded-lg transition" title="Ver e Imprimir Ticket">
+                <button onclick="openTicketModal('\${c.id}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-teal-400 rounded-lg transition" title="Ver Ticket Térmico">
                   <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="downloadPdf('\${c.id}', 'a4')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded-lg transition" title="Descargar PDF A4">
+                  <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="downloadPdf('\${c.id}', 'ticket')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg transition" title="Descargar PDF Ticket (80mm)">
+                  <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
                 </button>
                 <button onclick="downloadComprobanteXml('\${c.id}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition" title="Descargar XML">
                   <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
@@ -2000,7 +2024,25 @@ adminUiRouter.get("/", (c) => {
       }
     }
 
+    let currentModalComprobanteId = "";
+
+    function downloadPdf(id, format = 'a4') {
+      const url = '/api/v1/admin/comprobantes/' + encodeURIComponent(id) + '/pdf?format=' + format + '&apiKey=' + encodeURIComponent(getAdminKey());
+      window.open(url, '_blank');
+    }
+
+    function downloadCurrentTicketPdf(format = 'ticket') {
+      if (!currentModalComprobanteId) return;
+      downloadPdf(currentModalComprobanteId, format);
+    }
+
+    function downloadLastPdf(format = 'a4') {
+      if (!lastGeneratedComprobanteId) return;
+      downloadPdf(lastGeneratedComprobanteId, format);
+    }
+
     function renderTicketDirect(c) {
+      currentModalComprobanteId = c.id || (c.serie + '-' + c.numero);
       const emp = currentEmpresas.find(e => e.ruc === c.empresa_ruc);
       document.getElementById("ticket-emisor-razon").textContent = emp?.razon_social || "EMPRESA FISCAL S.A.C.";
       document.getElementById("ticket-emisor-ruc").textContent = "RUC: " + (c.empresa_ruc || env_ruc_fallback);
