@@ -50,7 +50,9 @@ describe("XMLDSig Digital Signer Tests", () => {
     const xml = Buffer.from(result.xmlBase64, "base64").toString("utf-8");
 
     // Validar presencia de tags de firma W3C / SUNAT
-    expect(xml).toContain('<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Id="Signature-SunatBilling">');
+    expect(xml).toContain('<ds:Signature');
+    expect(xml).toContain('Id="Signature-SunatBilling"');
+    expect(xml).toContain('xmlns:ds="http://www.w3.org/2000/09/xmldsig#"');
     expect(xml).toContain('<ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>');
     expect(xml).toContain('<ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>');
     expect(xml).toContain('<ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>');
@@ -176,5 +178,71 @@ describe("XMLDSig Digital Signer Tests", () => {
     expect(greXml).toContain(gre.hash);
     expect(greXml).toContain("<ds:SignatureValue>");
     expect(greXml).toContain("<ds:X509Certificate>");
+  });
+
+  it("Debe ser validado exitosamente por un verificador estándar W3C XMLDSig (C14N y Enveloped)", () => {
+    const result = buildUblXml({
+      tipoComprobante: "03",
+      serie: "B001",
+      numero: 99,
+      fechaEmision: "2026-11-18",
+      horaEmision: "12:00:00",
+      moneda: "PEN",
+      emisor: {
+        ruc: "20600000001",
+        razonSocial: "EMPRESA PRUEBA S.A.C.",
+        nombreComercial: "DEMO SAC",
+        direccion: "AV LIMA 123",
+        ubigeo: "150101",
+        departamento: "LIMA",
+        provincia: "LIMA",
+        distrito: "LIMA",
+      },
+      cliente: {
+        tipoDoc: "1",
+        numDoc: "44444444",
+        nombre: "JUAN PEREZ",
+      },
+      items: [
+        {
+          sku: "PROD-1",
+          descripcion: "PRODUCTO PRUEBA",
+          unidadMedida: "NIU",
+          cantidad: 1,
+          precioUnitario: 50,
+          valorUnitario: 42.37,
+          tipoAfectacionIgv: "10",
+          igv: 7.63,
+          total: 50,
+        },
+      ],
+      totalGravadas: 42.37,
+      totalExoneradas: 0,
+      totalInafectas: 0,
+      totalIgv: 7.63,
+      totalVenta: 50,
+      medioPago: "efectivo",
+    });
+
+    const xml = Buffer.from(result.xmlBase64, "base64").toString("utf-8");
+
+    // Extraer certificado X.509
+    const certMatch = xml.match(/<ds:X509Certificate>([^<]+)<\/ds:X509Certificate>/i);
+    expect(certMatch).toBeTruthy();
+    const certBase64 = certMatch![1];
+    const certPem = `-----BEGIN CERTIFICATE-----\n${certBase64.match(/.{1,64}/g)?.join("\n")}\n-----END CERTIFICATE-----`;
+
+    // Parsear DOM
+    const { DOMParser } = require("@xmldom/xmldom");
+    const { SignedXml } = require("xml-crypto");
+
+    const doc = new DOMParser().parseFromString(xml, "text/xml");
+    const sigNode = doc.getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature")[0] || doc.getElementsByTagName("ds:Signature")[0];
+    expect(sigNode).toBeTruthy();
+
+    const verifier = new SignedXml({ publicCert: certPem });
+    verifier.loadSignature(sigNode);
+    const isValid = verifier.checkSignature(xml);
+    expect(isValid).toBe(true);
   });
 });

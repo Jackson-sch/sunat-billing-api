@@ -21,11 +21,13 @@
   "dependencies": {
     "@hono/zod-validator": "^0.9.1",
     "@scalar/hono-api-reference": "^0.12.1",
+    "@xmldom/xmldom": "^0.9.12",
     "adm-zip": "^0.6.0",
     "fast-xml-parser": "^5.11.1",
     "hono": "^4.13.7",
     "jszip": "^3.10.2",
     "node-forge": "^1.4.0",
+    "xml-crypto": "^6.4.0",
     "zod": "^3.24.2"
   }
 }

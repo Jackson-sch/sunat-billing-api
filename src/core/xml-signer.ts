@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import forge from "node-forge";
+import { SignedXml } from "xml-crypto";
 import { env } from "../config/env.js";
 import { SunatDocumentData } from "./types.js";
 
@@ -198,70 +199,66 @@ export function loadCertificate(options?: CertificateOptions): LoadedCertificate
 }
 
 /**
- * Normaliza y canonicaliza el XML eliminando declaraciones previas para el cómputo del digest
- */
-function canonicalizeXmlForEnvelopedDigest(xml: string): string {
-  // Elimina la firma existente si la hubiera para el cálculo del transform enveloped-signature
-  let clean = xml.replace(/<ds:Signature[\s\S]*?<\/ds:Signature>/gi, "");
-  // Remueve la declaración XML inicial
-  clean = clean.replace(/<\?xml[^>]*\?>/gi, "");
-  // Normaliza saltos de línea
-  clean = clean.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  return clean.trim();
-}
-
-/**
  * Aplica la Firma Digital XMLDSig (W3C / SUNAT UBL 2.1) al contenido XML
+ * Cumple con el estándar W3C XMLDSig, canonicalización C14N (W3C REC-xml-c14n-20010315)
+ * y Enveloped Signature RSA-SHA256 exigido por los servicios web de SUNAT y OSEs.
  */
 export function signXml(xmlContent: string, options?: CertificateOptions): XmlSignatureResult {
   const cert = loadCertificate(options);
 
-  // 1. Calcular DigestValue sobre el documento canonicalizado (Enveloped Signature)
-  const canonicalDoc = canonicalizeXmlForEnvelopedDigest(xmlContent);
-  const digestValue = crypto.createHash("sha256").update(canonicalDoc, "utf8").digest("base64");
-
-  // 2. Construir elemento <ds:SignedInfo> canónico
-  const signedInfo = `<ds:SignedInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI=""><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>${digestValue}</ds:DigestValue></ds:Reference></ds:SignedInfo>`;
-
-  // 3. Firmar <ds:SignedInfo> con la clave privada RSA-SHA256
-  const signer = crypto.createSign("RSA-SHA256");
-  signer.update(signedInfo, "utf8");
-  const signatureValue = signer.sign(cert.privateKeyPem, "base64");
-
-  // 4. Construir bloque completo <ds:Signature Id="Signature-SunatBilling">
-  const signatureXml = `<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Id="Signature-SunatBilling">
-          ${signedInfo}
-          <ds:SignatureValue>${signatureValue}</ds:SignatureValue>
-          <ds:KeyInfo>
-            <ds:X509Data>
-              <ds:X509Certificate>${cert.certBase64}</ds:X509Certificate>
-            </ds:X509Data>
-          </ds:KeyInfo>
-        </ds:Signature>`;
-
-  // 5. Inyectar <ds:Signature> dentro de <ext:ExtensionContent>
-  let signedXml = xmlContent;
-  if (signedXml.includes("<ext:ExtensionContent/>")) {
-    signedXml = signedXml.replace(
-      "<ext:ExtensionContent/>",
-      `<ext:ExtensionContent>\n        ${signatureXml}\n      </ext:ExtensionContent>`
-    );
-  } else if (signedXml.includes("<ext:ExtensionContent></ext:ExtensionContent>")) {
-    signedXml = signedXml.replace(
-      "<ext:ExtensionContent></ext:ExtensionContent>",
-      `<ext:ExtensionContent>\n        ${signatureXml}\n      </ext:ExtensionContent>`
-    );
-  } else if (/<ext:ExtensionContent>[\s\S]*?<\/ext:ExtensionContent>/i.test(signedXml)) {
-    signedXml = signedXml.replace(
-      /<ext:ExtensionContent>[\s\S]*?<\/ext:ExtensionContent>/i,
-      `<ext:ExtensionContent>\n        ${signatureXml}\n      </ext:ExtensionContent>`
-    );
-  } else if (signedXml.includes("<ext:UBLExtensions>")) {
-    signedXml = signedXml.replace(
-      "<ext:UBLExtensions>",
-      `<ext:UBLExtensions>\n    <ext:UBLExtension>\n      <ext:ExtensionContent>\n        ${signatureXml}\n      </ext:ExtensionContent>\n    </ext:UBLExtension>`
-    );
+  // 1. Limpiar firma previa o nodo de extensión para que el transform y XPath operen de forma determinista
+  let cleanXml = xmlContent;
+  if (/<ds:Signature[\s\S]*?<\/ds:Signature>/i.test(cleanXml)) {
+    cleanXml = cleanXml.replace(/<ds:Signature[\s\S]*?<\/ds:Signature>/gi, "");
   }
+  cleanXml = cleanXml.replace(/<ext:ExtensionContent>[\s\S]*?<\/ext:ExtensionContent>/gi, "<ext:ExtensionContent/>");
+
+  if (!cleanXml.includes("ExtensionContent")) {
+    if (cleanXml.includes("<ext:UBLExtensions>")) {
+      cleanXml = cleanXml.replace(
+        "<ext:UBLExtensions>",
+        "<ext:UBLExtensions>\n    <ext:UBLExtension>\n      <ext:ExtensionContent/>\n    </ext:UBLExtension>"
+      );
+    }
+  }
+
+  // 2. Configurar SignedXml con C14N y RSA-SHA256 estándar W3C
+  const sig = new SignedXml({
+    privateKey: cert.privateKeyPem,
+    signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+    canonicalizationAlgorithm: "http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
+    getKeyInfoContent: () => `<ds:X509Data><ds:X509Certificate>${cert.certBase64}</ds:X509Certificate></ds:X509Data>`,
+  });
+
+  // 3. Referencia Enveloped Signature al documento completo (URI="")
+  sig.addReference({
+    xpath: "/*",
+    transforms: ["http://www.w3.org/2000/09/xmldsig#enveloped-signature"],
+    digestAlgorithm: "http://www.w3.org/2001/04/xmlenc#sha256",
+    isEmptyUri: true,
+    uri: "",
+  });
+
+  // 4. Computar firma e inyectarla en ExtensionContent
+  sig.computeSignature(cleanXml, {
+    prefix: "ds",
+    attrs: {
+      Id: "Signature-SunatBilling",
+    },
+    location: {
+      reference: "//*[local-name(.)='ExtensionContent']",
+      action: "append",
+    },
+  });
+
+  const signedXml = sig.getSignedXml();
+
+  // 5. Extraer DigestValue y SignatureValue
+  const digestMatch = signedXml.match(/<ds:DigestValue>([^<]+)<\/ds:DigestValue>/i);
+  const digestValue = digestMatch ? digestMatch[1] : "";
+
+  const sigMatch = signedXml.match(/<ds:SignatureValue>([^<]+)<\/ds:SignatureValue>/i);
+  const signatureValue = sigMatch ? sigMatch[1] : (sig as any).signatureValue || "";
 
   return {
     signedXml,
