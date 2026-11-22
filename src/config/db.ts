@@ -133,6 +133,23 @@ class MemoryDbFallback {
             emp.is_beta = is_beta;
           }
         }
+      } else if (params.length === 4) {
+        const [usuario_sol, clave_sol, is_beta, id] = params;
+        for (const emp of this.empresas.values()) {
+          if (emp.id === id) {
+            emp.usuario_sol = usuario_sol;
+            emp.clave_sol = clave_sol;
+            emp.is_beta = is_beta;
+          }
+        }
+      } else if (params.length === 3) {
+        const [certificado_pfx, certificado_password, id] = params;
+        for (const emp of this.empresas.values()) {
+          if (emp.id === id) {
+            emp.certificado_pfx = certificado_pfx;
+            emp.certificado_password = certificado_password;
+          }
+        }
       } else if (params.length === 2) {
         const [val, id] = params;
         for (const emp of this.empresas.values()) {
@@ -855,6 +872,70 @@ export async function actualizarEmpresa(
       "SELECT id, ruc, razon_social, api_key, usuario_sol, is_beta, activo, CASE WHEN certificado_pfx IS NOT NULL AND certificado_pfx != '' THEN 1 ELSE 0 END AS tiene_certificado FROM empresas WHERE id = ?"
     )
     .get(id);
+}
+
+export async function actualizarCertificadoEmpresa(
+  id: string,
+  certificadoPfx: string | null,
+  certificadoPassword: string | null
+): Promise<boolean> {
+  await initDb();
+  const sql = getDb();
+  const certPfx = certificadoPfx?.trim() || null;
+  const certPass = certPfx ? (certificadoPassword ?? "") : null;
+
+  if (sql) {
+    try {
+      const [actualizada] = await sql`
+        UPDATE empresas
+        SET certificado_pfx = ${certPfx},
+            certificado_password = ${certPass}
+        WHERE id = ${id}
+        RETURNING id
+      `;
+      if (actualizada) return true;
+    } catch (err: any) {
+      console.warn("Error actualizando certificado en Postgres:", err.message || err);
+    }
+  }
+
+  const sqlite = getSqlite();
+  sqlite.run(
+    "UPDATE empresas SET certificado_pfx = ?, certificado_password = ? WHERE id = ?",
+    [certPfx, certPass, id]
+  );
+  return true;
+}
+
+export async function actualizarCredencialesEmpresa(
+  id: string,
+  data: { usuarioSol: string; claveSol: string; isBeta: boolean }
+): Promise<boolean> {
+  await initDb();
+  const sql = getDb();
+
+  if (sql) {
+    try {
+      const [actualizada] = await sql`
+        UPDATE empresas
+        SET usuario_sol = ${data.usuarioSol},
+            clave_sol = ${data.claveSol},
+            is_beta = ${data.isBeta}
+        WHERE id = ${id}
+        RETURNING id
+      `;
+      if (actualizada) return true;
+    } catch (err: any) {
+      console.warn("Error actualizando credenciales en Postgres:", err.message || err);
+    }
+  }
+
+  const sqlite = getSqlite();
+  sqlite.run(
+    "UPDATE empresas SET usuario_sol = ?, clave_sol = ?, is_beta = ? WHERE id = ?",
+    [data.usuarioSol, data.claveSol, data.isBeta ? 1 : 0, id]
+  );
+  return true;
 }
 
 export async function regenerarApiKeyEmpresa(id: string, newApiKey: string): Promise<string | null> {

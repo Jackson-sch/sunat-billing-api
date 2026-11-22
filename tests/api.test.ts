@@ -200,6 +200,68 @@ describe("SUNAT Billing API Tests", () => {
 
       const signedXml = Buffer.from(emitted.xmlBase64, "base64").toString("utf-8");
       expect(signedXml).toContain(certBase64);
+
+      // 4. Autoservicio del cliente: consultar /api/v1/empresa/me y renovar su propio CDT con su sk_live_...
+      const meRes = await app.fetch(
+        new Request("http://localhost:3001/api/v1/empresa/me", {
+          headers: { "x-api-key": empresaApiKey },
+        })
+      );
+      expect(meRes.status).toBe(200);
+      const meData = await meRes.json();
+      expect(meData.empresa.tieneCertificado).toBe(true);
+      expect(meData.empresa.ruc).toBe(testRuc);
+
+      const rotated = createTestPfxBase64("EMPRESA TEST PFX RENOVADO SAC", "nueva_clave_2027");
+      const renewRes = await app.fetch(
+        new Request("http://localhost:3001/api/v1/empresa/certificado", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": empresaApiKey,
+          },
+          body: JSON.stringify({
+            certificadoPfx: rotated.pfxBase64,
+            certificadoPassword: "nueva_clave_2027",
+          }),
+        })
+      );
+      expect(renewRes.status).toBe(200);
+
+      const emitRenewedRes = await app.fetch(
+        new Request("http://localhost:3001/api/v1/cpe/emitir", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": empresaApiKey,
+          },
+          body: JSON.stringify({
+            tipoComprobante: "01",
+            serie: "F001",
+            numero: 56,
+            moneda: "PEN",
+            cliente: {
+              tipoDoc: "6",
+              numDoc: "20555555555",
+              nombre: "CLIENTE TEST S.A.C.",
+            },
+            items: [
+              {
+                sku: "SERV-2",
+                descripcion: "RENOVACION CDT",
+                cantidad: 1,
+                precioUnitario: 118,
+                tipoAfectacionIgv: "10",
+              },
+            ],
+            enviarASunat: false,
+          }),
+        })
+      );
+      expect(emitRenewedRes.status).toBe(200);
+      const emittedRenewed = await emitRenewedRes.json();
+      const renewedXml = Buffer.from(emittedRenewed.xmlBase64, "base64").toString("utf-8");
+      expect(renewedXml).toContain(rotated.certBase64);
     } finally {
       // Limpiar empresa de prueba
       await app.fetch(

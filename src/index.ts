@@ -14,6 +14,7 @@ import { consultasRouter } from "./routes/consultas.js";
 import { sireRouter } from "./routes/sire.js";
 import { adminRouter } from "./routes/admin.js";
 import { adminUiRouter } from "./routes/admin-ui.js";
+import { empresaRouter } from "./routes/empresa.js";
 
 const app = new Hono();
 
@@ -138,6 +139,32 @@ app.get("/openapi.json", (c) => {
           summary: "Generación de archivo plano SIRE 8.1 (RCE)",
           description: "Genera el archivo TXT oficial de compras para el SIRE.",
           responses: { "200": { description: "TXT generado en Base64" } },
+        },
+      },
+      "/api/v1/empresa/me": {
+        get: {
+          summary: "Consultar estado de la empresa autenticada",
+          description: "Retorna RUC, razón social, ambiente (Beta/Producción) y si tiene Certificado Digital (.pfx) configurado.",
+          responses: { "200": { description: "Datos de la empresa" } },
+        },
+      },
+      "/api/v1/empresa/certificado": {
+        put: {
+          summary: "Subir o renovar Certificado Digital Tributario (.pfx/.p12)",
+          description: "Permite al cliente autenticado con su API Key (sk_live_...) cargar y validar su propio certificado .pfx y contraseña.",
+          responses: { "200": { description: "Certificado actualizado y validado" } },
+        },
+        delete: {
+          summary: "Eliminar Certificado Digital guardado",
+          description: "Remueve el .pfx guardado de la empresa autenticada.",
+          responses: { "200": { description: "Certificado eliminado" } },
+        },
+      },
+      "/api/v1/empresa/credenciales": {
+        put: {
+          summary: "Actualizar Usuario/Clave SOL y ambiente (Beta/Producción)",
+          description: "Permite al cliente actualizar sus credenciales SOL y cambiar entre Beta y Producción.",
+          responses: { "200": { description: "Credenciales actualizadas" } },
         },
       },
     },
@@ -370,6 +397,7 @@ app.route("/api/v1/gre", greRouter);
 app.route("/api/v1/resumenes", resumenesRouter);
 app.route("/api/v1/consultas", consultasRouter);
 app.route("/api/v1/sire", sireRouter);
+app.route("/api/v1/empresa", empresaRouter);
 
 console.log(`🚀 SUNAT Billing API escuchando en http://localhost:${env.PORT}`);
 console.log(`🛡️ Panel Administrativo UI disponible en http://localhost:${env.PORT}/admin`);
