@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EmisorSchema, ClienteSchema } from "./cpe.schema";
+import { EmisorSchema, ClienteSchema } from "./cpe.schema.js";
 
 export const GreItemSchema = z.object({
   id: z.string().optional(),

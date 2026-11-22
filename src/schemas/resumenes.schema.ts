@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EmisorSchema } from "./cpe.schema";
+import { EmisorSchema } from "./cpe.schema.js";
 
 export const ResumenBoletaItemSchema = z.object({
   linea: z.number().int().positive(),
