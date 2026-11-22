@@ -60,6 +60,9 @@ adminRouter.use("*", async (c, next) => {
   if (!token && authHeader?.startsWith("Bearer ")) {
     token = authHeader.substring(7).trim();
   }
+  if (!token) {
+    token = c.req.query("apiKey") || c.req.query("token") || c.req.query("x-api-key");
+  }
 
   if (!token || token !== env.API_KEY) {
     return c.json(
