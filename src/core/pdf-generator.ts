@@ -53,40 +53,90 @@ export interface InvoicePdfData {
   };
 }
 
+function xmlText(val: any, fallback = ""): string {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === "object") {
+    if ("#text" in val && val["#text"] !== undefined && val["#text"] !== null) {
+      return String(val["#text"]).trim();
+    }
+    return fallback;
+  }
+  return String(val).trim();
+}
+
+function xmlNum(val: any, fallback = 0): number {
+  const txt = xmlText(val, "");
+  if (!txt) return fallback;
+  const n = parseFloat(txt);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export function parseUblXmlToPdfData(xmlContent: string, fallback?: Partial<InvoicePdfData>): InvoicePdfData {
   try {
-    const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true });
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      removeNSPrefix: true,
+      parseTagValue: false,
+    });
     const parsed = parser.parse(xmlContent);
     const root = parsed.Invoice || parsed.CreditNote || parsed.DebitNote || parsed.DespatchAdvice;
 
     if (!root) throw new Error("No se encontró nodo raíz UBL válido");
 
-    const idStr = root.ID || "";
-    const [serie = "F001", numStr = "1"] = String(idStr).split("-");
+    const idStr = xmlText(root.ID, "F001-1");
+    const [serie = "F001", numStr = "1"] = idStr.split("-");
     const numero = parseInt(numStr, 10) || 1;
 
     // Emisor
     const supplierParty = root.AccountingSupplierParty?.Party || {};
-    const emisorRuc = supplierParty.PartyIdentification?.ID || root.AccountingSupplierParty?.CustomerAssignedAccountID || fallback?.emisor?.ruc || "20000000001";
-    const emisorRazon = supplierParty.PartyLegalEntity?.RegistrationName || fallback?.emisor?.razonSocial || "EMPRESA FISCAL S.A.C.";
-    const emisorDir = supplierParty.PostalAddress?.StreetName || supplierParty.PostalAddress?.AddressLine?.Line || fallback?.emisor?.direccion || "LIMA - PERÚ";
+    const emisorRuc =
+      xmlText(supplierParty.PartyIdentification?.ID) ||
+      xmlText(root.AccountingSupplierParty?.CustomerAssignedAccountID) ||
+      fallback?.emisor?.ruc ||
+      "20000000001";
+    const emisorRazon =
+      xmlText(supplierParty.PartyLegalEntity?.RegistrationName) ||
+      fallback?.emisor?.razonSocial ||
+      "EMPRESA FISCAL S.A.C.";
+    const emisorDir =
+      xmlText(supplierParty.PostalAddress?.StreetName) ||
+      xmlText(supplierParty.PostalAddress?.AddressLine?.Line) ||
+      fallback?.emisor?.direccion ||
+      "LIMA - PERÚ";
 
     // Cliente
     const customerParty = root.AccountingCustomerParty?.Party || {};
-    const clienteDoc = customerParty.PartyIdentification?.ID || root.AccountingCustomerParty?.CustomerAssignedAccountID || fallback?.cliente?.numDoc || "00000000";
-    const clienteNombre = customerParty.PartyLegalEntity?.RegistrationName || customerParty.PartyName?.Name || fallback?.cliente?.nombre || "CLIENTES VARIOS";
-    const clienteDir = customerParty.PostalAddress?.StreetName || customerParty.PostalAddress?.AddressLine?.Line || fallback?.cliente?.direccion || "";
+    const clienteDoc =
+      xmlText(customerParty.PartyIdentification?.ID) ||
+      xmlText(root.AccountingCustomerParty?.CustomerAssignedAccountID) ||
+      fallback?.cliente?.numDoc ||
+      "00000000";
+    const clienteNombre =
+      xmlText(customerParty.PartyLegalEntity?.RegistrationName) ||
+      xmlText(customerParty.PartyName?.Name) ||
+      fallback?.cliente?.nombre ||
+      "CLIENTES VARIOS";
+    const clienteDir =
+      xmlText(customerParty.PostalAddress?.StreetName) ||
+      xmlText(customerParty.PostalAddress?.AddressLine?.Line) ||
+      fallback?.cliente?.direccion ||
+      "";
 
     // Items
     const rawLines = root.InvoiceLine || root.CreditNoteLine || root.DebitNoteLine || [];
     const linesArray = Array.isArray(rawLines) ? rawLines : [rawLines].filter(Boolean);
 
     const items: InvoicePdfItem[] = linesArray.map((line: any) => {
-      const cantidad = parseFloat(line.InvoicedQuantity || line.CreditedQuantity || line.DebitedQuantity || 1);
-      const descripcion = line.Item?.Description || "Item";
-      const precioUnitario = parseFloat(line.PricingReference?.AlternativeConditionPrice?.PriceAmount || line.Price?.PriceAmount || 0);
-      const total = parseFloat(line.LineExtensionAmount || (cantidad * precioUnitario));
-      const uom = line.InvoicedQuantity?.["@_unitCode"] || "NIU";
+      const qtyNode = line.InvoicedQuantity ?? line.CreditedQuantity ?? line.DebitedQuantity;
+      const cantidad = xmlNum(qtyNode, 1);
+      const descripcion = xmlText(line.Item?.Description, "Item");
+      const altPrice = line.PricingReference?.AlternativeConditionPrice;
+      const altPriceNode = Array.isArray(altPrice) ? altPrice[0] : altPrice;
+      const precioUnitario = xmlNum(altPriceNode?.PriceAmount ?? line.Price?.PriceAmount, 0);
+      const lineExt = xmlNum(line.LineExtensionAmount, 0);
+      const lineTax = xmlNum(line.TaxTotal?.TaxAmount, 0);
+      const total = precioUnitario > 0 ? +(cantidad * precioUnitario).toFixed(2) : +(lineExt + lineTax).toFixed(2);
+      const uom = (typeof qtyNode === "object" && qtyNode?.["@_unitCode"]) ? String(qtyNode["@_unitCode"]) : "NIU";
       return {
         cantidad,
         unidadMedida: uom,
@@ -97,20 +147,36 @@ export function parseUblXmlToPdfData(xmlContent: string, fallback?: Partial<Invo
     });
 
     // Totales
-    const totalVenta = parseFloat(root.LegalMonetaryTotal?.PayableAmount || root.LegalMonetaryTotal?.TaxInclusiveAmount || fallback?.totales?.total || 0);
-    const totalGravadas = parseFloat(root.LegalMonetaryTotal?.LineExtensionAmount || fallback?.totales?.gravadas || 0);
-    const totalIgv = parseFloat(root.TaxTotal?.TaxAmount || fallback?.totales?.igv || 0);
+    const totalVenta = xmlNum(
+      root.LegalMonetaryTotal?.PayableAmount ?? root.LegalMonetaryTotal?.TaxInclusiveAmount,
+      fallback?.totales?.total ?? 0
+    );
+    const totalGravadas = xmlNum(
+      root.LegalMonetaryTotal?.LineExtensionAmount,
+      fallback?.totales?.gravadas ?? 0
+    );
+    const taxTotalNode = Array.isArray(root.TaxTotal) ? root.TaxTotal[0] : root.TaxTotal;
+    const totalIgv = xmlNum(taxTotalNode?.TaxAmount, fallback?.totales?.igv ?? 0);
 
     // Hash Digest
-    const hash = root.UBLExtensions?.UBLExtension?.ExtensionContent?.Signature?.SignedInfo?.Reference?.DigestValue || fallback?.hashSunat || "";
+    const extRaw = root.UBLExtensions?.UBLExtension;
+    const extNode = Array.isArray(extRaw) ? extRaw[0] : extRaw;
+    const hash =
+      xmlText(extNode?.ExtensionContent?.Signature?.SignedInfo?.Reference?.DigestValue) ||
+      fallback?.hashSunat ||
+      "";
+
+    const tipoComprobante =
+      xmlText(root.InvoiceTypeCode) ||
+      (root.CreditNoteTypeCode ? "07" : root.DebitNoteTypeCode ? "08" : fallback?.tipoComprobante || "01");
 
     return {
-      tipoComprobante: (root.InvoiceTypeCode || (root.CreditNoteTypeCode ? "07" : root.DebitNoteTypeCode ? "08" : "01")),
+      tipoComprobante,
       serie,
       numero,
-      fechaEmision: root.IssueDate || new Date().toISOString().split("T")[0]!,
-      horaEmision: root.IssueTime || "00:00:00",
-      moneda: root.DocumentCurrencyCode || "PEN",
+      fechaEmision: xmlText(root.IssueDate, new Date().toISOString().split("T")[0]!),
+      horaEmision: xmlText(root.IssueTime, "00:00:00"),
+      moneda: xmlText(root.DocumentCurrencyCode, "PEN"),
       emisor: {
         ruc: emisorRuc,
         razonSocial: emisorRazon,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import app from "../src/index";
+import { parseUblXmlToPdfData } from "../src/core/pdf-generator";
 
 describe("PDF Generation Tests", () => {
   it("POST /api/v1/cpe/emitir debe retornar pdfBase64 en la respuesta", async () => {
@@ -41,6 +42,16 @@ describe("PDF Generation Tests", () => {
 
     const pdfBuffer = Buffer.from(data.pdfBase64, "base64");
     expect(pdfBuffer.toString("utf-8", 0, 5)).toBe("%PDF-");
+
+    const xml = Buffer.from(data.xmlBase64, "base64").toString("utf-8");
+    const parsedPdf = parseUblXmlToPdfData(xml);
+    expect(parsedPdf.tipoComprobante).toBe("01");
+    expect(parsedPdf.emisor.ruc).toBe("20000000001");
+    expect(parsedPdf.cliente.numDoc).toBe("20555555555");
+    expect(parsedPdf.items[0]?.cantidad).toBe(1);
+    expect(parsedPdf.items[0]?.total).toBe(100);
+    expect(parsedPdf.totales.total).toBe(100);
+    expect(parsedPdf.totales.igv).toBeGreaterThan(0);
   });
 
   it("GET /api/v1/cpe/F001-10/pdf debe responder 200 con Content-Type application/pdf en A4", async () => {
