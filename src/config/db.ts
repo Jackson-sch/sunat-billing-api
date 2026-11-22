@@ -35,6 +35,8 @@ class MemoryDbFallback {
       api_key: env.API_KEY,
       usuario_sol: env.SUNAT_USUARIO_SOL,
       clave_sol: env.SUNAT_CLAVE_SOL,
+      certificado_pfx: env.SUNAT_CERT_BASE64 || null,
+      certificado_password: env.SUNAT_CERT_PASSWORD || null,
       is_beta: 1,
       activo: 1,
       created_at: new Date().toISOString(),
@@ -54,13 +56,15 @@ class MemoryDbFallback {
             api_key,
             usuario_sol,
             clave_sol,
+            certificado_pfx: null,
+            certificado_password: null,
             is_beta: 1,
             activo: 1,
             created_at: new Date().toISOString(),
           });
         }
       } else {
-        const [id, ruc, razon_social, api_key, usuario_sol, clave_sol, is_beta, created_at] = params;
+        const [id, ruc, razon_social, api_key, usuario_sol, clave_sol, is_beta, certificado_pfx, certificado_password, created_at] = params;
         this.empresas.set(ruc, {
           id,
           ruc,
@@ -69,6 +73,8 @@ class MemoryDbFallback {
           usuario_sol,
           clave_sol,
           is_beta,
+          certificado_pfx: certificado_pfx || null,
+          certificado_password: certificado_password || null,
           activo: 1,
           created_at: created_at || new Date().toISOString(),
         });
@@ -105,7 +111,19 @@ class MemoryDbFallback {
         created_at: new Date().toISOString(),
       });
     } else if (q.startsWith("UPDATE EMPRESAS")) {
-      if (params.length === 5) {
+      if (params.length === 7) {
+        const [razon_social, usuario_sol, clave_sol, is_beta, certificado_pfx, certificado_password, id] = params;
+        for (const emp of this.empresas.values()) {
+          if (emp.id === id) {
+            emp.razon_social = razon_social;
+            emp.usuario_sol = usuario_sol;
+            emp.clave_sol = clave_sol;
+            emp.is_beta = is_beta;
+            emp.certificado_pfx = certificado_pfx;
+            emp.certificado_password = certificado_password;
+          }
+        }
+      } else if (params.length === 5) {
         const [razon_social, usuario_sol, clave_sol, is_beta, id] = params;
         for (const emp of this.empresas.values()) {
           if (emp.id === id) {
@@ -168,6 +186,7 @@ class MemoryDbFallback {
             const totalMonto = docs.reduce((acc, d) => acc + Number(d.total || 0), 0);
             return {
               ...emp,
+              tiene_certificado: Boolean(emp.certificado_pfx),
               total_docs: docs.length,
               total_monto: Number(totalMonto.toFixed(2)),
             };
@@ -264,11 +283,17 @@ export async function initDb(): Promise<void> {
           api_key VARCHAR(64) UNIQUE NOT NULL,
           usuario_sol VARCHAR(50),
           clave_sol VARCHAR(100),
+          certificado_pfx TEXT,
+          certificado_password VARCHAR(255),
           is_beta BOOLEAN DEFAULT true,
           activo BOOLEAN DEFAULT true,
           created_at TIMESTAMPTZ DEFAULT now()
         );
       `;
+
+      // Migraciones idempotentes para tablas existentes en PostgreSQL
+      await sql`ALTER TABLE empresas ADD COLUMN IF NOT EXISTS certificado_pfx TEXT;`;
+      await sql`ALTER TABLE empresas ADD COLUMN IF NOT EXISTS certificado_password VARCHAR(255);`;
 
       // 2. Tabla comprobantes en PostgreSQL
       await sql`
@@ -321,11 +346,25 @@ export async function initDb(): Promise<void> {
         api_key TEXT UNIQUE NOT NULL,
         usuario_sol TEXT,
         clave_sol TEXT,
+        certificado_pfx TEXT,
+        certificado_password TEXT,
         is_beta INTEGER DEFAULT 1,
         activo INTEGER DEFAULT 1,
         created_at TEXT DEFAULT (datetime('now'))
       );
     `);
+
+    // Migración idempotente para bases SQLite locales existentes
+    try {
+      const cols = sqlite.query("PRAGMA table_info(empresas)").all() as Array<{ name: string }>;
+      const colNames = new Set((cols || []).map((c) => c.name));
+      if (!colNames.has("certificado_pfx")) {
+        sqlite.run("ALTER TABLE empresas ADD COLUMN certificado_pfx TEXT;");
+      }
+      if (!colNames.has("certificado_password")) {
+        sqlite.run("ALTER TABLE empresas ADD COLUMN certificado_password TEXT;");
+      }
+    } catch {}
 
     sqlite.run(`
       CREATE TABLE IF NOT EXISTS comprobantes (
@@ -612,6 +651,7 @@ export async function obtenerEmpresas(): Promise<any[]> {
           e.is_beta, 
           e.activo, 
           e.created_at,
+          (e.certificado_pfx IS NOT NULL AND e.certificado_pfx <> '') AS tiene_certificado,
           COALESCE(COUNT(c.id), 0)::int AS total_docs,
           COALESCE(SUM(c.total), 0)::numeric(12,2) AS total_monto
         FROM empresas e
@@ -637,6 +677,7 @@ export async function obtenerEmpresas(): Promise<any[]> {
         e.is_beta, 
         e.activo, 
         e.created_at,
+        CASE WHEN e.certificado_pfx IS NOT NULL AND e.certificado_pfx != '' THEN 1 ELSE 0 END AS tiene_certificado,
         COALESCE(COUNT(c.id), 0) AS total_docs,
         ROUND(COALESCE(SUM(c.total), 0), 2) AS total_monto
       FROM empresas e
@@ -655,6 +696,7 @@ export async function obtenerEmpresas(): Promise<any[]> {
         api_key: env.API_KEY,
         usuario_sol: env.SUNAT_USUARIO_SOL,
         is_beta: env.SUNAT_ENV === "beta",
+        tiene_certificado: Boolean(env.SUNAT_CERT_BASE64),
         activo: 1,
         total_docs: 0,
         total_monto: 0,
@@ -671,16 +713,20 @@ export async function crearEmpresa(data: {
   usuarioSol?: string;
   claveSol?: string;
   isBeta?: boolean;
+  certificadoPfx?: string | null;
+  certificadoPassword?: string | null;
 }): Promise<any> {
   await initDb();
   const sql = getDb();
+  const certPfx = data.certificadoPfx?.trim() || null;
+  const certPass = certPfx ? (data.certificadoPassword ?? "") : null;
 
   if (sql) {
     try {
       const [nueva] = await sql`
-        INSERT INTO empresas (ruc, razon_social, api_key, usuario_sol, clave_sol, is_beta, activo)
-        VALUES (${data.ruc}, ${data.razonSocial}, ${data.apiKey}, ${data.usuarioSol || "MODDATOS"}, ${data.claveSol || "MODDATOS"}, ${data.isBeta ?? true}, true)
-        RETURNING id, ruc, razon_social, api_key, usuario_sol, is_beta, activo, created_at
+        INSERT INTO empresas (ruc, razon_social, api_key, usuario_sol, clave_sol, is_beta, certificado_pfx, certificado_password, activo)
+        VALUES (${data.ruc}, ${data.razonSocial}, ${data.apiKey}, ${data.usuarioSol || "MODDATOS"}, ${data.claveSol || "MODDATOS"}, ${data.isBeta ?? true}, ${certPfx}, ${certPass}, true)
+        RETURNING id, ruc, razon_social, api_key, usuario_sol, is_beta, activo, created_at, (certificado_pfx IS NOT NULL AND certificado_pfx <> '') AS tiene_certificado
       `;
       return nueva;
     } catch (err: any) {
@@ -692,8 +738,8 @@ export async function crearEmpresa(data: {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   sqlite.run(
-    `INSERT INTO empresas (id, ruc, razon_social, api_key, usuario_sol, clave_sol, is_beta, activo, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+    `INSERT INTO empresas (id, ruc, razon_social, api_key, usuario_sol, clave_sol, is_beta, certificado_pfx, certificado_password, activo, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
     [
       id,
       data.ruc,
@@ -702,6 +748,8 @@ export async function crearEmpresa(data: {
       data.usuarioSol || "MODDATOS",
       data.claveSol || "MODDATOS",
       data.isBeta ?? true ? 1 : 0,
+      certPfx,
+      certPass,
       now,
     ]
   );
@@ -713,6 +761,7 @@ export async function crearEmpresa(data: {
     api_key: data.apiKey,
     usuario_sol: data.usuarioSol || "MODDATOS",
     is_beta: data.isBeta ?? true,
+    tiene_certificado: Boolean(certPfx),
     activo: 1,
     created_at: now,
   };
@@ -720,22 +769,58 @@ export async function crearEmpresa(data: {
 
 export async function actualizarEmpresa(
   id: string,
-  data: { razonSocial: string; usuarioSol?: string; claveSol?: string; isBeta?: boolean }
+  data: {
+    razonSocial: string;
+    usuarioSol?: string;
+    claveSol?: string;
+    isBeta?: boolean;
+    certificadoPfx?: string | null;
+    certificadoPassword?: string | null;
+    eliminarCertificado?: boolean;
+  }
 ): Promise<any | null> {
   await initDb();
   const sql = getDb();
+  const newCertPfx = data.certificadoPfx?.trim() || null;
 
   if (sql) {
     try {
-      const [actualizada] = await sql`
-        UPDATE empresas
-        SET razon_social = ${data.razonSocial},
-            usuario_sol = ${data.usuarioSol || "MODDATOS"},
-            clave_sol = ${data.claveSol || "MODDATOS"},
-            is_beta = ${data.isBeta ?? true}
-        WHERE id = ${id}
-        RETURNING id, ruc, razon_social, api_key, usuario_sol, is_beta, activo
-      `;
+      let actualizada: any;
+      if (data.eliminarCertificado) {
+        [actualizada] = await sql`
+          UPDATE empresas
+          SET razon_social = ${data.razonSocial},
+              usuario_sol = ${data.usuarioSol || "MODDATOS"},
+              clave_sol = ${data.claveSol || "MODDATOS"},
+              is_beta = ${data.isBeta ?? true},
+              certificado_pfx = NULL,
+              certificado_password = NULL
+          WHERE id = ${id}
+          RETURNING id, ruc, razon_social, api_key, usuario_sol, is_beta, activo, (certificado_pfx IS NOT NULL AND certificado_pfx <> '') AS tiene_certificado
+        `;
+      } else if (newCertPfx) {
+        [actualizada] = await sql`
+          UPDATE empresas
+          SET razon_social = ${data.razonSocial},
+              usuario_sol = ${data.usuarioSol || "MODDATOS"},
+              clave_sol = ${data.claveSol || "MODDATOS"},
+              is_beta = ${data.isBeta ?? true},
+              certificado_pfx = ${newCertPfx},
+              certificado_password = ${data.certificadoPassword ?? ""}
+          WHERE id = ${id}
+          RETURNING id, ruc, razon_social, api_key, usuario_sol, is_beta, activo, (certificado_pfx IS NOT NULL AND certificado_pfx <> '') AS tiene_certificado
+        `;
+      } else {
+        [actualizada] = await sql`
+          UPDATE empresas
+          SET razon_social = ${data.razonSocial},
+              usuario_sol = ${data.usuarioSol || "MODDATOS"},
+              clave_sol = ${data.claveSol || "MODDATOS"},
+              is_beta = ${data.isBeta ?? true}
+          WHERE id = ${id}
+          RETURNING id, ruc, razon_social, api_key, usuario_sol, is_beta, activo, (certificado_pfx IS NOT NULL AND certificado_pfx <> '') AS tiene_certificado
+        `;
+      }
       if (actualizada) return actualizada;
     } catch (err: any) {
       console.warn("Error actualizando en Postgres:", err.message || err);
@@ -743,13 +828,33 @@ export async function actualizarEmpresa(
   }
 
   const sqlite = getSqlite();
-  sqlite.run(
-    `UPDATE empresas
-     SET razon_social = ?, usuario_sol = ?, clave_sol = ?, is_beta = ?
-     WHERE id = ?`,
-    [data.razonSocial, data.usuarioSol || "MODDATOS", data.claveSol || "MODDATOS", data.isBeta ? 1 : 0, id]
-  );
-  return sqlite.query("SELECT id, ruc, razon_social, api_key, usuario_sol, is_beta, activo FROM empresas WHERE id = ?").get(id);
+  if (data.eliminarCertificado) {
+    sqlite.run(
+      `UPDATE empresas
+       SET razon_social = ?, usuario_sol = ?, clave_sol = ?, is_beta = ?, certificado_pfx = ?, certificado_password = ?
+       WHERE id = ?`,
+      [data.razonSocial, data.usuarioSol || "MODDATOS", data.claveSol || "MODDATOS", data.isBeta ? 1 : 0, null, null, id]
+    );
+  } else if (newCertPfx) {
+    sqlite.run(
+      `UPDATE empresas
+       SET razon_social = ?, usuario_sol = ?, clave_sol = ?, is_beta = ?, certificado_pfx = ?, certificado_password = ?
+       WHERE id = ?`,
+      [data.razonSocial, data.usuarioSol || "MODDATOS", data.claveSol || "MODDATOS", data.isBeta ? 1 : 0, newCertPfx, data.certificadoPassword ?? "", id]
+    );
+  } else {
+    sqlite.run(
+      `UPDATE empresas
+       SET razon_social = ?, usuario_sol = ?, clave_sol = ?, is_beta = ?
+       WHERE id = ?`,
+      [data.razonSocial, data.usuarioSol || "MODDATOS", data.claveSol || "MODDATOS", data.isBeta ? 1 : 0, id]
+    );
+  }
+  return sqlite
+    .query(
+      "SELECT id, ruc, razon_social, api_key, usuario_sol, is_beta, activo, CASE WHEN certificado_pfx IS NOT NULL AND certificado_pfx != '' THEN 1 ELSE 0 END AS tiene_certificado FROM empresas WHERE id = ?"
+    )
+    .get(id);
 }
 
 export async function regenerarApiKeyEmpresa(id: string, newApiKey: string): Promise<string | null> {
@@ -827,6 +932,8 @@ export async function buscarEmpresaPorApiKey(apiKey: string): Promise<any | null
       razon_social: "EMPRESA POR DEFECTO (.ENV)",
       usuario_sol: env.SUNAT_USUARIO_SOL,
       clave_sol: env.SUNAT_CLAVE_SOL,
+      certificado_pfx: env.SUNAT_CERT_BASE64 || null,
+      certificado_password: env.SUNAT_CERT_PASSWORD || null,
       is_beta: env.SUNAT_ENV === "beta",
       activo: 1,
     };
@@ -838,7 +945,7 @@ export async function buscarEmpresaPorApiKey(apiKey: string): Promise<any | null
   if (sql) {
     try {
       const rows = await sql`
-        SELECT id, ruc, razon_social, usuario_sol, clave_sol, is_beta, activo
+        SELECT id, ruc, razon_social, usuario_sol, clave_sol, certificado_pfx, certificado_password, is_beta, activo
         FROM empresas
         WHERE api_key = ${apiKey} AND activo = true
         LIMIT 1
@@ -851,7 +958,13 @@ export async function buscarEmpresaPorApiKey(apiKey: string): Promise<any | null
 
   try {
     const sqlite = getSqlite();
-    return sqlite.query("SELECT id, ruc, razon_social, usuario_sol, clave_sol, is_beta, activo FROM empresas WHERE api_key = ? AND activo = 1 LIMIT 1").get(apiKey) || null;
+    return (
+      sqlite
+        .query(
+          "SELECT id, ruc, razon_social, usuario_sol, clave_sol, certificado_pfx, certificado_password, is_beta, activo FROM empresas WHERE api_key = ? AND activo = 1 LIMIT 1"
+        )
+        .get(apiKey) || null
+    );
   } catch (err: any) {
     console.error("Error buscando api_key en SQLite:", err.message || err);
     return null;

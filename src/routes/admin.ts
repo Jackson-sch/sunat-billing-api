@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import crypto from "crypto";
 import { env } from "../config/env.js";
-import { generateInvoicePdf, parseUblXmlToPdfData } from "../core/index.js";
+import { generateInvoicePdf, parseUblXmlToPdfData, validatePfxCertificate } from "../core/index.js";
+import { invalidateApiKeyCache } from "../middlewares/auth.js";
 import {
   obtenerEmpresas,
   crearEmpresa,
@@ -101,6 +102,10 @@ adminRouter.post("/empresas", async (c) => {
     const usuarioSol = String(body.usuarioSol || "MODDATOS").trim();
     const claveSol = String(body.claveSol || "MODDATOS").trim();
     const isBeta = body.isBeta ?? true;
+    const rawCertPfx = typeof body.certificadoPfx === "string"
+      ? body.certificadoPfx.replace(/^data:[^;]+;base64,/, "").trim()
+      : "";
+    const certificadoPassword = typeof body.certificadoPassword === "string" ? body.certificadoPassword : "";
 
     // Generar API Key si no se especifica
     const apiKey =
@@ -114,6 +119,15 @@ adminRouter.post("/empresas", async (c) => {
       return c.json({ success: false, error: "La Razón Social es requerida." }, 400);
     }
 
+    let certSubject: string | undefined;
+    if (rawCertPfx) {
+      const check = validatePfxCertificate(rawCertPfx, certificadoPassword);
+      if (!check.valid) {
+        return c.json({ success: false, error: check.error }, 400);
+      }
+      certSubject = check.subject;
+    }
+
     const nueva = await crearEmpresa({
       ruc,
       razonSocial,
@@ -121,9 +135,14 @@ adminRouter.post("/empresas", async (c) => {
       usuarioSol,
       claveSol,
       isBeta,
+      certificadoPfx: rawCertPfx || null,
+      certificadoPassword: rawCertPfx ? certificadoPassword : null,
     });
 
-    return c.json({ success: true, empresa: { ...nueva, total_docs: 0, total_monto: 0 } }, 201);
+    return c.json(
+      { success: true, certSubject, empresa: { ...nueva, total_docs: 0, total_monto: 0 } },
+      201
+    );
   } catch (error: any) {
     if (error.message?.includes("unique") || error.code === "23505") {
       return c.json(
@@ -146,9 +165,23 @@ adminRouter.put("/empresas/:id", async (c) => {
     const usuarioSol = String(body.usuarioSol || "MODDATOS").trim();
     const claveSol = String(body.claveSol || "MODDATOS").trim();
     const isBeta = body.isBeta ?? true;
+    const eliminarCertificado = Boolean(body.eliminarCertificado);
+    const rawCertPfx = typeof body.certificadoPfx === "string"
+      ? body.certificadoPfx.replace(/^data:[^;]+;base64,/, "").trim()
+      : "";
+    const certificadoPassword = typeof body.certificadoPassword === "string" ? body.certificadoPassword : "";
 
     if (!razonSocial) {
       return c.json({ success: false, error: "La Razón Social es requerida." }, 400);
+    }
+
+    let certSubject: string | undefined;
+    if (rawCertPfx && !eliminarCertificado) {
+      const check = validatePfxCertificate(rawCertPfx, certificadoPassword);
+      if (!check.valid) {
+        return c.json({ success: false, error: check.error }, 400);
+      }
+      certSubject = check.subject;
     }
 
     const actualizada = await actualizarEmpresa(id, {
@@ -156,13 +189,17 @@ adminRouter.put("/empresas/:id", async (c) => {
       usuarioSol,
       claveSol,
       isBeta,
+      certificadoPfx: rawCertPfx || null,
+      certificadoPassword: rawCertPfx ? certificadoPassword : null,
+      eliminarCertificado,
     });
 
     if (!actualizada) {
       return c.json({ success: false, error: "Empresa no encontrada." }, 404);
     }
 
-    return c.json({ success: true, empresa: actualizada });
+    invalidateApiKeyCache();
+    return c.json({ success: true, certSubject, empresa: actualizada });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);
   }
@@ -181,6 +218,7 @@ adminRouter.post("/empresas/:id/regenerate-key", async (c) => {
       return c.json({ success: false, error: "Empresa no encontrada." }, 404);
     }
 
+    invalidateApiKeyCache();
     return c.json({ success: true, api_key: newApiKey });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);
@@ -199,6 +237,7 @@ adminRouter.patch("/empresas/:id/toggle", async (c) => {
       return c.json({ success: false, error: "Empresa no encontrada." }, 404);
     }
 
+    invalidateApiKeyCache();
     return c.json({ success: true, empresa: actualizada });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);
@@ -212,6 +251,7 @@ adminRouter.delete("/empresas/:id", async (c) => {
   try {
     const id = c.req.param("id");
     await eliminarEmpresa(id);
+    invalidateApiKeyCache();
     return c.json({ success: true, message: "Empresa eliminada correctamente." });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);

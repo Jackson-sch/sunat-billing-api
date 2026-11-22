@@ -110,6 +110,32 @@ function extractFromP12Buffer(p12Buffer: Buffer, password = ""): LoadedCertifica
 }
 
 /**
+ * Valida que un certificado PKCS#12 (.pfx/.p12) en Base64 pueda abrirse con la contraseña indicada
+ */
+export function validatePfxCertificate(
+  certBase64: string,
+  password = ""
+): { valid: boolean; subject?: string; error?: string } {
+  try {
+    const cleanBase64 = certBase64.replace(/^data:[^;]+;base64,/, "").trim();
+    const pfxBuffer = Buffer.from(cleanBase64, "base64");
+    const cert = extractFromP12Buffer(pfxBuffer, password);
+    if (!cert) {
+      return {
+        valid: false,
+        error: "No se pudo abrir el certificado .pfx/.p12. Verifica que el archivo sea válido y la contraseña sea correcta.",
+      };
+    }
+    return { valid: true, subject: cert.subject };
+  } catch (err: any) {
+    return {
+      valid: false,
+      error: err?.message || "Certificado PKCS#12 inválido.",
+    };
+  }
+}
+
+/**
  * Genera un certificado digital X.509 RSA-2048 autofirmado en memoria para ambientes de desarrollo y pruebas
  */
 function generateTestCertificate(): LoadedCertificate {

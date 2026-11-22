@@ -109,8 +109,8 @@ cpeRouter.post("/emitir", zValidator("json", EmitCpeSchema), async (c) => {
   // 1. Construir XML UBL 2.1 y firma digital XMLDSig
   const certOptions = {
     certPath: body.certificado?.path,
-    certPassword: body.certificado?.password,
-    certBase64: body.certificado?.base64 || empresaAuth?.certificado_pfx,
+    certPassword: body.certificado?.password ?? empresaAuth?.certificado_password ?? undefined,
+    certBase64: body.certificado?.base64 || empresaAuth?.certificado_pfx || undefined,
   };
   const ublResult = buildUblXml(docData, certOptions);
 

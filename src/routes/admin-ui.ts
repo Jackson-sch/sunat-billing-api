@@ -905,6 +905,28 @@ adminUiRouter.get("/", (c) => {
           </div>
         </div>
 
+        <div class="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <label class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <i data-lucide="shield-check" class="w-4 h-4 text-teal-400"></i>
+              <span>Certificado Digital Tributario (.pfx / .p12)</span>
+            </label>
+            <span id="modal-cert-status" class="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">Sin certificado</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <input type="file" id="modal-cert-file" accept=".pfx,.p12" onchange="handleCertFileChange(event)" class="w-full text-[11px] text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-teal-400 hover:file:bg-slate-700 cursor-pointer">
+            </div>
+            <div>
+              <input type="password" id="modal-cert-password" placeholder="Contraseña del .pfx" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:border-teal-500 focus:outline-none">
+            </div>
+          </div>
+          <label id="modal-cert-remove-wrap" class="hidden items-center gap-2 text-[11px] text-rose-400 cursor-pointer select-none">
+            <input type="checkbox" id="modal-cert-remove" class="rounded bg-slate-900 border-slate-700 text-rose-500 focus:ring-0">
+            <span>Quitar certificado guardado y volver a certificado de prueba</span>
+          </label>
+        </div>
+
         <div class="pt-3 border-t border-slate-800 flex justify-end gap-2">
           <button type="button" onclick="closeModalEmpresa()" class="px-4 py-2 text-xs text-slate-400 hover:text-white rounded-xl">Cancelar</button>
           <button type="submit" id="modal-submit-btn" class="bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-semibold text-xs px-5 py-2 rounded-xl shadow-lg shadow-teal-500/20">Guardar Negocio</button>
@@ -1400,9 +1422,14 @@ adminUiRouter.get("/", (c) => {
             <div class="text-xs text-slate-400 font-mono">S/ \${parseFloat(emp.total_monto || 0).toFixed(2)}</div>
           </td>
           <td class="py-4 px-6">
-            <span class="px-2 py-0.5 rounded-full text-xs font-semibold \${emp.is_beta ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}">
-              \${emp.is_beta ? 'BETA' : 'PROD'}
-            </span>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="px-2 py-0.5 rounded-full text-xs font-semibold \${emp.is_beta ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}">
+                \${emp.is_beta ? 'BETA' : 'PROD'}
+              </span>
+              <span class="px-2 py-0.5 rounded-full text-[11px] font-medium \${emp.tiene_certificado ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}" title="\${emp.tiene_certificado ? 'Certificado digital .pfx configurado' : 'Sin certificado propio (usa fallback de prueba)'}">
+                \${emp.tiene_certificado ? 'PFX OK' : 'PFX Prueba'}
+              </span>
+            </div>
           </td>
           <td class="py-4 px-6">
             <button onclick="toggleEmpresaActive('\${emp.id}')" class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none \${emp.activo ? 'bg-teal-500' : 'bg-slate-700'}" title="Activar/Desactivar">
@@ -1513,13 +1540,38 @@ adminUiRouter.get("/", (c) => {
       renderEmpresasTable(filtered);
     }
 
+    let pendingCertBase64 = "";
+
+    function handleCertFileChange(e) {
+      const file = e.target.files && e.target.files[0];
+      const statusEl = document.getElementById("modal-cert-status");
+      if (!file) {
+        pendingCertBase64 = "";
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const result = String(evt.target.result || "");
+        pendingCertBase64 = result.includes(",") ? result.split(",")[1] : result;
+        statusEl.textContent = "Listo: " + file.name;
+        statusEl.className = "text-[11px] px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30";
+        document.getElementById("modal-cert-remove").checked = false;
+      };
+      reader.readAsDataURL(file);
+    }
+
     function openModalEmpresa() {
       document.getElementById("modal-empresa-title").innerHTML = '<i data-lucide="building-2" class="w-5 h-5 text-teal-400"></i><span>Registrar Nuevo Negocio</span>';
       document.getElementById("form-empresa").reset();
+      pendingCertBase64 = "";
       document.getElementById("modal-empresa-id").value = "";
       document.getElementById("modal-ruc").readOnly = false;
       document.getElementById("modal-ruc-btn").classList.remove("hidden");
       document.getElementById("modal-api-key-container").classList.remove("hidden");
+      document.getElementById("modal-cert-status").textContent = "Opcional (usa prueba)";
+      document.getElementById("modal-cert-status").className = "text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400";
+      document.getElementById("modal-cert-remove-wrap").classList.add("hidden");
+      document.getElementById("modal-cert-remove-wrap").classList.remove("flex");
       generateRandomApiKey();
       document.getElementById("modal-empresa").classList.remove("hidden");
       lucide.createIcons();
@@ -1530,6 +1582,11 @@ adminUiRouter.get("/", (c) => {
       if (!emp) return;
 
       document.getElementById("modal-empresa-title").innerHTML = '<i data-lucide="edit-3" class="w-5 h-5 text-teal-400"></i><span>Editar Datos del Negocio</span>';
+      pendingCertBase64 = "";
+      document.getElementById("modal-cert-file").value = "";
+      document.getElementById("modal-cert-password").value = "";
+      document.getElementById("modal-cert-remove").checked = false;
+
       document.getElementById("modal-empresa-id").value = emp.id;
       document.getElementById("modal-ruc").value = emp.ruc;
       document.getElementById("modal-ruc").readOnly = true;
@@ -1539,6 +1596,20 @@ adminUiRouter.get("/", (c) => {
       document.getElementById("modal-clave-sol").value = emp.clave_sol || "MODDATOS";
       document.getElementById("modal-is-beta").value = emp.is_beta ? "true" : "false";
       document.getElementById("modal-api-key-container").classList.add("hidden");
+
+      const statusEl = document.getElementById("modal-cert-status");
+      const removeWrap = document.getElementById("modal-cert-remove-wrap");
+      if (emp.tiene_certificado) {
+        statusEl.textContent = "Certificado PFX configurado";
+        statusEl.className = "text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30";
+        removeWrap.classList.remove("hidden");
+        removeWrap.classList.add("flex");
+      } else {
+        statusEl.textContent = "Sin certificado (usa prueba)";
+        statusEl.className = "text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400";
+        removeWrap.classList.add("hidden");
+        removeWrap.classList.remove("flex");
+      }
 
       document.getElementById("modal-empresa").classList.remove("hidden");
       lucide.createIcons();
@@ -1557,6 +1628,8 @@ adminUiRouter.get("/", (c) => {
       const claveSol = document.getElementById("modal-clave-sol").value.trim();
       const isBeta = document.getElementById("modal-is-beta").value === "true";
       const apiKey = document.getElementById("modal-api-key").value.trim();
+      const certificadoPassword = document.getElementById("modal-cert-password").value;
+      const eliminarCertificado = document.getElementById("modal-cert-remove").checked;
 
       const btn = document.getElementById("modal-submit-btn");
       btn.disabled = true;
@@ -1564,7 +1637,26 @@ adminUiRouter.get("/", (c) => {
 
       const url = id ? \`/api/v1/admin/empresas/\${id}\` : "/api/v1/admin/empresas";
       const method = id ? "PUT" : "POST";
-      const payload = id ? { razonSocial, usuarioSol, claveSol, isBeta } : { ruc, razonSocial, usuarioSol, claveSol, isBeta, apiKey };
+      const payload = id
+        ? {
+            razonSocial,
+            usuarioSol,
+            claveSol,
+            isBeta,
+            certificadoPfx: pendingCertBase64 || undefined,
+            certificadoPassword: pendingCertBase64 ? certificadoPassword : undefined,
+            eliminarCertificado,
+          }
+        : {
+            ruc,
+            razonSocial,
+            usuarioSol,
+            claveSol,
+            isBeta,
+            apiKey,
+            certificadoPfx: pendingCertBase64 || undefined,
+            certificadoPassword: pendingCertBase64 ? certificadoPassword : undefined,
+          };
 
       try {
         const res = await fetch(url, {
@@ -1576,7 +1668,8 @@ adminUiRouter.get("/", (c) => {
         if (data.success) {
           closeModalEmpresa();
           await loadEmpresas();
-          showToast(id ? "Negocio actualizado con éxito" : "Nuevo negocio registrado correctamente", "success");
+          const certMsg = data.certSubject ? " (Certificado verificado)" : "";
+          showToast((id ? "Negocio actualizado con éxito" : "Nuevo negocio registrado correctamente") + certMsg, "success");
         } else {
           showToast(data.error || "Error al procesar negocio", "error");
         }

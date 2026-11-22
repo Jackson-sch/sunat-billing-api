@@ -7,6 +7,13 @@ const API_KEY_CACHE = new Map<string, { empresa: any; expiresAt: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de cache
 
 /**
+ * Invalida la caché de credenciales/certificados de empresas (e.g. al editar o rotar clave)
+ */
+export function invalidateApiKeyCache(): void {
+  API_KEY_CACHE.clear();
+}
+
+/**
  * Middleware para validar la clave de autenticación API Key
  * Admite:
  * 1. API Key Maestra (.env / Vercel API_KEY)
