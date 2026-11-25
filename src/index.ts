@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
-import { apiReference } from "@scalar/hono-api-reference";
+import { Scalar } from "@scalar/hono-api-reference";
 import { env } from "./config/env.js";
+import { buildOpenApiSpec } from "./config/openapi.js";
 import { apiKeyAuth } from "./middlewares/auth.js";
 import { errorHandler } from "./middlewares/error-handler.js";
 import { healthRouter } from "./routes/health.js";
@@ -28,158 +29,39 @@ app.onError(errorHandler);
 // OpenAPI Specification Route
 app.get("/openapi.json", (c) => {
   const origin = new URL(c.req.url).origin;
-
-  return c.json({
-    openapi: "3.1.0",
-    info: {
-      title: "SUNAT Electronic Billing API (Perú)",
-      version: "1.0.0",
-      description:
-        "Microservicio y API REST de alto rendimiento en Bun para emisión de comprobantes electrónicos (UBL 2.1), guías de remisión (GRE), resúmenes diarios (RC), bajas (RA), libros SIRE y consultas de RUC/DNI ante SUNAT.",
-      contact: {
-        name: "Soporte Técnico de Facturación",
-        email: "facturacion@novamarket.pe",
-      },
-    },
-    servers: [
-      {
-        url: origin,
-        description: "Servidor Activo",
-      },
-      {
-        url: "https://sunat-billing-api.vercel.app",
-        description: "Producción (Vercel)",
-      },
-      {
-        url: `http://localhost:${env.PORT}`,
-        description: "Desarrollo Local (Bun)",
-      },
-    ],
-    components: {
-      securitySchemes: {
-        ApiKeyAuth: {
-          type: "apiKey",
-          in: "header",
-          name: "x-api-key",
-          description: "Clave de acceso a la API",
-        },
-        BearerAuth: {
-          type: "http",
-          scheme: "bearer",
-        },
-      },
-    },
-    security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }],
-    paths: {
-      "/api/v1/health": {
-        get: {
-          summary: "Estado y telemetría de SUNAT",
-          description: "Verifica el estado del servicio y la latencia con los servidores SOAP de SUNAT.",
-          responses: { "200": { description: "Servicio saludable" } },
-        },
-      },
-      "/api/v1/cpe/emitir": {
-        post: {
-          summary: "Emisión de Factura, Boleta o Nota de Crédito (UBL 2.1)",
-          description: "Genera el XML firmado con XMLDSig, genera código QR canónico y opcionalmente envía el comprobante a SUNAT vía SOAP/OSE.",
-          responses: { "200": { description: "Comprobante emitido con éxito" } },
-        },
-      },
-      "/api/v1/gre/emitir": {
-        post: {
-          summary: "Emisión de Guía de Remisión Electrónica (GRE 09)",
-          description: "Genera y firma la Guía de Remisión Remitente UBL 2.1 con datos de chofer, vehículo o transportista.",
-          responses: { "200": { description: "Guía de remisión emitida" } },
-        },
-      },
-      "/api/v1/resumenes/rc": {
-        post: {
-          summary: "Envío de Resumen Diario de Boletas (RC)",
-          description: "Genera el paquete XML de boletas y retorna el número de Ticket de SUNAT.",
-          responses: { "200": { description: "Ticket generado" } },
-        },
-      },
-      "/api/v1/resumenes/ra": {
-        post: {
-          summary: "Comunicación de Bajas (RA)",
-          description: "Anula formalmente facturas o notas de crédito electrónicas.",
-          responses: { "200": { description: "Baja generada" } },
-        },
-      },
-      "/api/v1/resumenes/status/{ticket}": {
-        get: {
-          summary: "Consulta de estado de ticket RC/RA",
-          description: "Consulta el estado de procesamiento del ticket en SUNAT y obtiene el CDR.",
-          responses: { "200": { description: "Estado de procesamiento" } },
-        },
-      },
-      "/api/v1/consultas/ruc": {
-        post: {
-          summary: "Consulta de RUC en SUNAT",
-          description: "Valida algoritmo Módulo 11 y retorna razón social, estado y condición fiscal.",
-          responses: { "200": { description: "Datos del contribuyente" } },
-        },
-      },
-      "/api/v1/consultas/dni": {
-        post: {
-          summary: "Consulta de DNI (Padrón / RENIEC)",
-          description: "Retorna nombres y apellidos completos asociados al DNI.",
-          responses: { "200": { description: "Datos de la persona" } },
-        },
-      },
-      "/api/v1/sire/ventas": {
-        post: {
-          summary: "Generación de archivo plano SIRE 14.1 (RVIE)",
-          description: "Genera el archivo TXT estructurado con la nomenclatura oficial de SUNAT.",
-          responses: { "200": { description: "TXT generado en Base64" } },
-        },
-      },
-      "/api/v1/sire/compras": {
-        post: {
-          summary: "Generación de archivo plano SIRE 8.1 (RCE)",
-          description: "Genera el archivo TXT oficial de compras para el SIRE.",
-          responses: { "200": { description: "TXT generado en Base64" } },
-        },
-      },
-      "/api/v1/empresa/me": {
-        get: {
-          summary: "Consultar estado de la empresa autenticada",
-          description: "Retorna RUC, razón social, ambiente (Beta/Producción) y si tiene Certificado Digital (.pfx) configurado.",
-          responses: { "200": { description: "Datos de la empresa" } },
-        },
-      },
-      "/api/v1/empresa/certificado": {
-        put: {
-          summary: "Subir o renovar Certificado Digital Tributario (.pfx/.p12)",
-          description: "Permite al cliente autenticado con su API Key (sk_live_...) cargar y validar su propio certificado .pfx y contraseña.",
-          responses: { "200": { description: "Certificado actualizado y validado" } },
-        },
-        delete: {
-          summary: "Eliminar Certificado Digital guardado",
-          description: "Remueve el .pfx guardado de la empresa autenticada.",
-          responses: { "200": { description: "Certificado eliminado" } },
-        },
-      },
-      "/api/v1/empresa/credenciales": {
-        put: {
-          summary: "Actualizar Usuario/Clave SOL y ambiente (Beta/Producción)",
-          description: "Permite al cliente actualizar sus credenciales SOL y cambiar entre Beta y Producción.",
-          responses: { "200": { description: "Credenciales actualizadas" } },
-        },
-      },
-    },
-  });
+  return c.json(buildOpenApiSpec(origin, env.PORT));
 });
 
 // Interactive API Documentation via Scalar UI
 app.get(
   "/docs",
-  apiReference({
-    spec: {
-      url: "/openapi.json",
+  Scalar({
+    url: "/openapi.json",
+    theme: "deepSpace",
+    layout: "modern",
+    darkMode: true,
+    pageTitle: "SUNAT Billing API | Documentación Interactiva",
+    defaultHttpClient: {
+      targetKey: "js",
+      clientKey: "fetch",
     },
-    theme: "purple",
-    pageTitle: "SUNAT Billing API Docs",
+    customCss: `
+      .dark-mode {
+        --scalar-background-1: #020617;
+        --scalar-background-2: #0f172a;
+        --scalar-background-3: #1e293b;
+        --scalar-color-accent: #14b8a6;
+        --scalar-button-1: #14b8a6;
+        --scalar-button-1-hover: #0d9488;
+        --scalar-button-1-color: #020617;
+        --scalar-border-color: rgba(148, 163, 184, 0.16);
+      }
+      .light-mode {
+        --scalar-color-accent: #0d9488;
+        --scalar-button-1: #0d9488;
+        --scalar-button-1-hover: #0f766e;
+      }
+    `,
   })
 );
 
